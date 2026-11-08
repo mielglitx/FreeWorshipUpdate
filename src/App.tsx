@@ -114,11 +114,12 @@ type LeftTab = 'songs' | 'scripture' | 'media' | 'audio' | 'themes';
 interface ContextMenuState {
   x: number;
   y: number;
-  category: 'songs' | 'scripture' | 'media' | 'audio';
+  category: 'songs' | 'scripture' | 'media' | 'audio' | 'schedule';
+  scheduleItemId?: string;
 }
 
 interface PendingDeleteState {
-  category: 'Song' | 'Media' | 'Audio Track';
+  category: 'Song' | 'Media' | 'Audio Track' | 'Schedule Item' | 'All Schedule Items';
   ids: string[];
   titles: string[];
 }
@@ -518,15 +519,14 @@ const OperatorConsole: React.FC = () => {
 
   // Broadcast live state on any change (<1ms zero-latency sync + LAN Android sync)
   useEffect(() => {
-    if (!activeItem) return;
     const payload: LiveBroadcastPayload = {
-      activeItemId: activeItem.id,
-      activeItemTitle: activeItem.title,
-      activeItemSubtitle: activeItem.subtitle,
+      activeItemId: activeItem?.id || '',
+      activeItemTitle: activeItem?.title || '',
+      activeItemSubtitle: activeItem?.subtitle || '',
       activeSlideIndex,
       currentSlide,
       nextSlide,
-      activeItemSlides: activeItem.slides,
+      activeItemSlides: activeItem?.slides || [],
       scheduleSummary: schedule.map((s) => ({
         id: s.id,
         type: s.type,
@@ -697,6 +697,14 @@ const OperatorConsole: React.FC = () => {
           break;
         case 'CLEAR_ALERT':
           setStageAlert((prev) => ({ ...prev, active: false, message: '' }));
+          break;
+        case 'DELETE_SCHEDULE_ITEM':
+          deleteScheduleItem(cmd.itemId);
+          break;
+        case 'CLEAR_SCHEDULE':
+          setSchedule([]);
+          setActiveItemId('');
+          setActiveSlideIndex(0);
           break;
         case 'ADD_SONG_TO_SCHEDULE': {
           const foundSong = songs.find((s) => s.id === cmd.songId);
@@ -1262,14 +1270,28 @@ const OperatorConsole: React.FC = () => {
   };
 
   const deleteScheduleItem = (id: string) => {
-    if (schedule.length <= 1) return;
     setSchedule((prev) => {
       const next = prev.filter((i) => i.id !== id);
-      if (activeItemId === id && next[0]) {
-        setActiveItemId(next[0].id);
+      if (activeItemId === id) {
+        if (next.length > 0) {
+          const removedIdx = prev.findIndex((i) => i.id === id);
+          const nextTarget = next[Math.min(removedIdx, next.length - 1)];
+          setActiveItemId(nextTarget.id);
+        } else {
+          setActiveItemId('');
+        }
         setActiveSlideIndex(0);
       }
       return next;
+    });
+  };
+
+  const clearAllScheduleItems = () => {
+    if (schedule.length === 0) return;
+    setPendingDelete({
+      category: 'All Schedule Items',
+      ids: schedule.map((s) => s.id),
+      titles: [`Entire Service Schedule (${schedule.length} items in Run-of-Show)`],
     });
   };
 
@@ -1465,6 +1487,19 @@ const OperatorConsole: React.FC = () => {
     } else if (pendingDelete.category === 'Audio Track') {
       setAudioTracks((prev) => prev.filter((t) => !idSet.has(t.id)));
       setSelectedAudioIds((prev) => prev.filter((id) => !idSet.has(id)));
+    } else if (pendingDelete.category === 'All Schedule Items') {
+      setSchedule([]);
+      setActiveItemId('');
+      setActiveSlideIndex(0);
+    } else if (pendingDelete.category === 'Schedule Item') {
+      setSchedule((prev) => {
+        const next = prev.filter((i) => !idSet.has(i.id));
+        if (idSet.has(activeItemId)) {
+          setActiveItemId(next[0]?.id || '');
+          setActiveSlideIndex(0);
+        }
+        return next;
+      });
     }
     setPendingDelete(null);
   };
@@ -2608,19 +2643,22 @@ const OperatorConsole: React.FC = () => {
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-black uppercase tracking-wider border border-amber-500/40">
-                    {activeItem?.type || 'ITEM'}
+                    {activeItem?.type || 'EMPTY'}
                   </span>
                   <h2 className="font-bold text-base text-white truncate">
-                    {activeItem?.title || 'Select an item'}
+                    {activeItem?.title || 'No Schedule Items'}
                   </h2>
                 </div>
-                <p className="text-xs text-slate-400 truncate">{activeItem?.subtitle}</p>
+                <p className="text-xs text-slate-400 truncate">
+                  {activeItem?.subtitle || (schedule.length === 0 ? 'Service schedule is currently empty' : 'Select an item to present')}
+                </p>
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   onClick={() => setShowQuickSlideModal(true)}
-                  className="px-3 py-1.5 rounded-lg bg-booth-800 hover:bg-booth-700 text-xs font-bold text-amber-300 border border-booth-700 flex items-center gap-1"
+                  disabled={!activeItem}
+                  className="px-3 py-1.5 rounded-lg bg-booth-800 hover:bg-booth-700 text-xs font-bold text-amber-300 border border-booth-700 flex items-center gap-1 disabled:opacity-40"
                   title="Add a spontaneous lyric or announcement slide on the fly"
                 >
                   <Zap className="w-3.5 h-3.5" />
@@ -2629,7 +2667,8 @@ const OperatorConsole: React.FC = () => {
                 <div className="flex items-center gap-1 bg-booth-950 p-1 rounded-lg border border-booth-800">
                   <button
                     onClick={goToPrevSlide}
-                    className="px-3 py-1.5 rounded bg-booth-850 hover:bg-booth-700 text-xs font-bold text-white flex items-center gap-1"
+                    disabled={!activeItem || activeItem.slides.length === 0}
+                    className="px-3 py-1.5 rounded bg-booth-850 hover:bg-booth-700 text-xs font-bold text-white flex items-center gap-1 disabled:opacity-40"
                     title="Previous Slide (Left/Up Arrow)"
                   >
                     <SkipBack className="w-3.5 h-3.5" />
@@ -2637,7 +2676,8 @@ const OperatorConsole: React.FC = () => {
                   </button>
                   <button
                     onClick={goToNextSlide}
-                    className="px-4 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-xs font-black text-white flex items-center gap-1 shadow"
+                    disabled={!activeItem || activeItem.slides.length === 0}
+                    className="px-4 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-xs font-black text-white flex items-center gap-1 shadow disabled:opacity-40"
                     title="Next Slide (Spacebar / Right Arrow)"
                   >
                     <span>Next</span>
@@ -2746,8 +2786,23 @@ const OperatorConsole: React.FC = () => {
 
           {/* Slide Deck Grid (With Huge Hit Targets, Glow Indicators, and Live Quick-Edit) */}
           <div className="flex-1 overflow-y-auto p-4">
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-              {activeItem?.slides.map((slide, idx) => {
+            {!activeItem || activeItem.slides.length === 0 ? (
+              <div className="h-full min-h-[300px] flex flex-col items-center justify-center p-8 text-center text-slate-500 space-y-3">
+                <Layers className="w-12 h-12 text-slate-600 mb-1" />
+                <h3 className="text-base font-bold text-slate-300">
+                  {schedule.length === 0
+                    ? 'Service Schedule is Empty'
+                    : 'No Slides in Selected Item'}
+                </h3>
+                <p className="text-xs text-slate-400 max-w-sm">
+                  {schedule.length === 0
+                    ? 'Click "+ Schedule" on any song, Bible passage, or media item, or drag and drop files into the schedule panel to begin presenting.'
+                    : 'Add slides to this item using "+ Quick Slide" or select another item from the schedule.'}
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                {activeItem.slides.map((slide, idx) => {
                 const isLive = idx === activeSlideIndex;
                 const isNext = idx === activeSlideIndex + 1;
                 const isEditingThis = quickEditSlideId === slide.id;
@@ -2881,6 +2936,7 @@ const OperatorConsole: React.FC = () => {
                 );
               })}
             </div>
+            )}
           </div>
 
           {/* Bottom Dual Broadcast Monitors: LIVE PROGRAM OUTPUT vs NEXT CUED PREVIEW */}
@@ -2895,7 +2951,7 @@ const OperatorConsole: React.FC = () => {
                   </span>
                 </div>
                 <span className="text-[11px] text-slate-400 font-mono">
-                  Slide {activeSlideIndex + 1} of {activeItem?.slides.length || 0}
+                  {activeItem ? `Slide ${activeSlideIndex + 1} of ${activeItem.slides.length}` : 'No Active Slide'}
                 </span>
               </div>
               <div className="flex-1 rounded-xl overflow-hidden border-2 border-emerald-500 shadow-lg relative bg-black">
@@ -2980,14 +3036,25 @@ const OperatorConsole: React.FC = () => {
                 </div>
               </div>
 
-              <button
-                onClick={() => pptxImportInputRef.current?.click()}
-                className="px-2.5 py-1 rounded-lg bg-booth-850 hover:bg-booth-800 border border-booth-700 text-[10px] font-bold text-amber-300 flex items-center gap-1 shrink-0"
-                title="Import PowerPoint (.pptx) sermon or announcement slides directly into Schedule"
-              >
-                <FileUp className="w-3 h-3" />
-                <span>+ .PPTX</span>
-              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  onClick={clearAllScheduleItems}
+                  disabled={schedule.length === 0}
+                  className="px-2 py-1 rounded bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-[10px] font-bold text-rose-400 flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
+                  title="Remove all items from the Service Schedule"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Clear All</span>
+                </button>
+                <button
+                  onClick={() => pptxImportInputRef.current?.click()}
+                  className="px-2.5 py-1 rounded-lg bg-booth-850 hover:bg-booth-800 border border-booth-700 text-[10px] font-bold text-amber-300 flex items-center gap-1 shrink-0"
+                  title="Import PowerPoint (.pptx) sermon or announcement slides directly into Schedule"
+                >
+                  <FileUp className="w-3 h-3" />
+                  <span>+ .PPTX</span>
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-1.5">
@@ -3001,7 +3068,8 @@ const OperatorConsole: React.FC = () => {
               </button>
               <button
                 onClick={() => exportScheduleJson(schedule, themes)}
-                className="py-1 px-2 rounded-lg bg-booth-900 hover:bg-booth-800 border border-booth-700 text-[10px] font-bold text-emerald-300 flex items-center justify-center gap-1"
+                disabled={schedule.length === 0}
+                className="py-1 px-2 rounded-lg bg-booth-900 hover:bg-booth-800 border border-booth-700 text-[10px] font-bold text-emerald-300 flex items-center justify-center gap-1 disabled:opacity-30"
                 title="Save / Export this Service Schedule (.fws.json)"
               >
                 <Download className="w-3 h-3" />
@@ -3012,15 +3080,34 @@ const OperatorConsole: React.FC = () => {
 
           {/* Schedule Timeline List */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {schedule.map((item, idx) => {
-              const isSelected = item.id === activeItem?.id;
-              return (
-                <div
-                  key={item.id}
-                  onClick={() => {
-                    setActiveItemId(item.id);
-                    setActiveSlideIndex(0);
-                  }}
+            {schedule.length === 0 ? (
+              <div className="h-full min-h-[220px] flex flex-col items-center justify-center p-6 text-center text-slate-500 space-y-2">
+                <Layers className="w-8 h-8 text-slate-600 mb-1" />
+                <p className="text-xs font-bold text-slate-400">Schedule is Empty</p>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Select songs, scripture, or media from the library to add them to your Run-of-Show, or drag and drop items here.
+                </p>
+              </div>
+            ) : (
+              schedule.map((item, idx) => {
+                const isSelected = item.id === activeItem?.id;
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => {
+                      setActiveItemId(item.id);
+                      setActiveSlideIndex(0);
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setContextMenu({
+                        x: e.clientX,
+                        y: e.clientY,
+                        category: 'schedule',
+                        scheduleItemId: item.id,
+                      });
+                    }}
                   className={`rounded-xl p-3 border-2 cursor-pointer transition relative ${
                     isSelected
                       ? 'bg-booth-850 border-emerald-400 shadow-lg'
@@ -3086,8 +3173,9 @@ const OperatorConsole: React.FC = () => {
                   </div>
                 </div>
               );
-            })}
-          </div>
+            })
+          )}
+        </div>
 
           {/* Stage Display & Confidence Monitor Controls (Timer + Private Band/Speaker Alert) */}
           <div className="p-3 bg-booth-950 border-t border-booth-800 space-y-3 shrink-0">
@@ -3260,91 +3348,134 @@ const OperatorConsole: React.FC = () => {
               `${selectedVerseKeys.length} Verse(s) Selected`}
             {contextMenu.category === 'media' && `${selectedMediaIds.length} Media Item(s) Selected`}
             {contextMenu.category === 'audio' && `${selectedAudioIds.length} Audio Track(s) Selected`}
+            {contextMenu.category === 'schedule' && 'Schedule Item'}
           </div>
 
-          {contextMenu.category !== 'audio' && (
+          {contextMenu.category === 'schedule' ? (
             <>
               <button
                 onClick={() => {
-                  if (contextMenu.category === 'songs') {
-                    const toAdd = songs.filter((s) => selectedSongIds.includes(s.id));
-                    toAdd.forEach((s) => addSongToSchedule(s, false));
-                  } else if (contextMenu.category === 'scripture') {
-                    const toAdd = filteredVerses.filter((v) =>
-                      selectedVerseKeys.includes(getVerseKey(v))
-                    );
-                    sendVerseListToSchedule(toAdd, false);
-                  } else if (contextMenu.category === 'media') {
-                    const toAdd = mediaPool.filter((m) => selectedMediaIds.includes(m.id));
-                    addMediaAssetsToSchedule(toAdd, false);
-                  }
-                  setContextMenu(null);
-                }}
-                className="w-full px-3 py-2 text-left hover:bg-booth-800 text-slate-100 font-bold flex items-center gap-2"
-              >
-                <Plus className="w-3.5 h-3.5 text-amber-400" />
-                <span>Add Selected to Schedule</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  if (contextMenu.category === 'songs') {
-                    const toAdd = songs.filter((s) => selectedSongIds.includes(s.id));
-                    toAdd.forEach((s, i) => addSongToSchedule(s, i === toAdd.length - 1));
-                  } else if (contextMenu.category === 'scripture') {
-                    const toAdd = filteredVerses.filter((v) =>
-                      selectedVerseKeys.includes(getVerseKey(v))
-                    );
-                    sendVerseListToSchedule(toAdd, true);
-                  } else if (contextMenu.category === 'media') {
-                    const toAdd = mediaPool.filter((m) => selectedMediaIds.includes(m.id));
-                    addMediaAssetsToSchedule(toAdd, true);
+                  if (contextMenu.scheduleItemId) {
+                    setActiveItemId(contextMenu.scheduleItemId);
+                    setActiveSlideIndex(0);
                   }
                   setContextMenu(null);
                 }}
                 className="w-full px-3 py-2 text-left hover:bg-booth-800 text-emerald-300 font-bold flex items-center gap-2"
               >
                 <Play className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Project Selected Live Now</span>
+                <span>Project Live Now</span>
+              </button>
+              <button
+                onClick={() => {
+                  if (contextMenu.scheduleItemId) {
+                    deleteScheduleItem(contextMenu.scheduleItemId);
+                  }
+                  setContextMenu(null);
+                }}
+                className="w-full px-3 py-2 text-left hover:bg-rose-950/60 text-rose-300 font-bold flex items-center gap-2 border-t border-booth-800"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                <span>Remove from Schedule</span>
+              </button>
+              <button
+                onClick={() => {
+                  setContextMenu(null);
+                  clearAllScheduleItems();
+                }}
+                className="w-full px-3 py-2 text-left hover:bg-red-950/60 text-red-400 font-bold flex items-center gap-2 border-t border-booth-800"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                <span>Clear Entire Schedule...</span>
               </button>
             </>
-          )}
+          ) : (
+            <>
+              {contextMenu.category !== 'audio' && (
+                <>
+                  <button
+                    onClick={() => {
+                      if (contextMenu.category === 'songs') {
+                        const toAdd = songs.filter((s) => selectedSongIds.includes(s.id));
+                        toAdd.forEach((s) => addSongToSchedule(s, false));
+                      } else if (contextMenu.category === 'scripture') {
+                        const toAdd = filteredVerses.filter((v) =>
+                          selectedVerseKeys.includes(getVerseKey(v))
+                        );
+                        sendVerseListToSchedule(toAdd, false);
+                      } else if (contextMenu.category === 'media') {
+                        const toAdd = mediaPool.filter((m) => selectedMediaIds.includes(m.id));
+                        addMediaAssetsToSchedule(toAdd, false);
+                      }
+                      setContextMenu(null);
+                    }}
+                    className="w-full px-3 py-2 text-left hover:bg-booth-800 text-slate-100 font-bold flex items-center gap-2"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Add Selected to Schedule</span>
+                  </button>
 
-          {contextMenu.category === 'media' && selectedMediaIds.length === 1 && (
-            <button
-              onClick={() => {
-                const targetId = selectedMediaIds[0];
-                setDefaultLogoMediaId((prev) => (prev === targetId ? '' : targetId));
-                setContextMenu(null);
-              }}
-              className="w-full px-3 py-2 text-left hover:bg-booth-800 text-amber-300 font-bold flex items-center gap-2 border-t border-booth-800"
-            >
-              <Star className="w-3.5 h-3.5 text-amber-400" />
-              <span>
-                {defaultLogoMediaId === selectedMediaIds[0]
-                  ? 'Clear Default Logo'
-                  : 'Set as Default Sanctuary Logo ([L])'}
-              </span>
-            </button>
-          )}
+                  <button
+                    onClick={() => {
+                      if (contextMenu.category === 'songs') {
+                        const toAdd = songs.filter((s) => selectedSongIds.includes(s.id));
+                        toAdd.forEach((s, i) => addSongToSchedule(s, i === toAdd.length - 1));
+                      } else if (contextMenu.category === 'scripture') {
+                        const toAdd = filteredVerses.filter((v) =>
+                          selectedVerseKeys.includes(getVerseKey(v))
+                        );
+                        sendVerseListToSchedule(toAdd, true);
+                      } else if (contextMenu.category === 'media') {
+                        const toAdd = mediaPool.filter((m) => selectedMediaIds.includes(m.id));
+                        addMediaAssetsToSchedule(toAdd, true);
+                      }
+                      setContextMenu(null);
+                    }}
+                    className="w-full px-3 py-2 text-left hover:bg-booth-800 text-emerald-300 font-bold flex items-center gap-2"
+                  >
+                    <Play className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Project Selected Live Now</span>
+                  </button>
+                </>
+              )}
 
-          {contextMenu.category !== 'scripture' && (
-            <button
-              onClick={() => {
-                if (contextMenu.category === 'songs') {
-                  requestDeleteSongs(selectedSongIds);
-                } else if (contextMenu.category === 'media') {
-                  requestDeleteMedia(selectedMediaIds);
-                } else if (contextMenu.category === 'audio') {
-                  requestDeleteAudioTracks(selectedAudioIds);
-                }
-                setContextMenu(null);
-              }}
-              className="w-full px-3 py-2 text-left hover:bg-red-950/60 text-red-400 font-bold flex items-center gap-2 border-t border-booth-800"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-red-400" />
-              <span>Delete Selected...</span>
-            </button>
+              {contextMenu.category === 'media' && selectedMediaIds.length === 1 && (
+                <button
+                  onClick={() => {
+                    const targetId = selectedMediaIds[0];
+                    setDefaultLogoMediaId((prev) => (prev === targetId ? '' : targetId));
+                    setContextMenu(null);
+                  }}
+                  className="w-full px-3 py-2 text-left hover:bg-booth-800 text-amber-300 font-bold flex items-center gap-2 border-t border-booth-800"
+                >
+                  <Star className="w-3.5 h-3.5 text-amber-400" />
+                  <span>
+                    {defaultLogoMediaId === selectedMediaIds[0]
+                      ? 'Clear Default Logo'
+                      : 'Set as Default Sanctuary Logo ([L])'}
+                  </span>
+                </button>
+              )}
+
+              {contextMenu.category !== 'scripture' && (
+                <button
+                  onClick={() => {
+                    if (contextMenu.category === 'songs') {
+                      requestDeleteSongs(selectedSongIds);
+                    } else if (contextMenu.category === 'media') {
+                      requestDeleteMedia(selectedMediaIds);
+                    } else if (contextMenu.category === 'audio') {
+                      requestDeleteAudioTracks(selectedAudioIds);
+                    }
+                    setContextMenu(null);
+                  }}
+                  className="w-full px-3 py-2 text-left hover:bg-red-950/60 text-red-400 font-bold flex items-center gap-2 border-t border-booth-800"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                  <span>Delete Selected...</span>
+                </button>
+              )}
+            </>
           )}
         </div>
       )}
@@ -3352,8 +3483,18 @@ const OperatorConsole: React.FC = () => {
       {/* Checkbox Delete Confirmation Modal */}
       {pendingDelete && (
         <ConfirmDeleteModal
-          title={`Confirm ${pendingDelete.category} Deletion`}
-          description={`Are you sure you want to permanently remove the following ${pendingDelete.category.toLowerCase()}(s) from your library?`}
+          title={
+            pendingDelete.category === 'All Schedule Items'
+              ? 'Clear Entire Service Schedule'
+              : pendingDelete.category === 'Schedule Item'
+              ? 'Remove Schedule Item'
+              : `Confirm ${pendingDelete.category} Deletion`
+          }
+          description={
+            pendingDelete.category === 'All Schedule Items'
+              ? 'Are you sure you want to remove ALL items from the active Service Schedule? This will clear the Run-of-Show.'
+              : `Are you sure you want to permanently remove the following ${pendingDelete.category.toLowerCase()}(s)?`
+          }
           itemNames={pendingDelete.titles}
           onConfirmDelete={executeConfirmedDelete}
           onCancel={() => setPendingDelete(null)}

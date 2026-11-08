@@ -132,7 +132,9 @@ export type RemoteControlAction =
   | { action: 'TOGGLE_TIMER' }
   | { action: 'SET_TIMER'; minutes: number }
   | { action: 'SEND_ALERT'; message: string; urgent: boolean }
-  | { action: 'CLEAR_ALERT' };
+  | { action: 'CLEAR_ALERT' }
+  | { action: 'DELETE_SCHEDULE_ITEM'; itemId: string }
+  | { action: 'CLEAR_SCHEDULE' };
 
 export interface ThemeTemplate {
   id: string;

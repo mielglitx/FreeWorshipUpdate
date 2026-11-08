@@ -18,6 +18,7 @@ import {
   Send,
   Smartphone,
   Sparkles,
+  Trash2,
   Wifi,
   WifiOff,
 } from 'lucide-react';
@@ -966,60 +967,116 @@ export const AndroidStageControllerView: React.FC = () => {
                 </div>
               )}
 
-              {/* TAB 2: SERVICE SCHEDULE SWITCHER */}
+              {/* TAB 2: SERVICE SCHEDULE SWITCHER & MANAGEMENT */}
               {controllerTab === 'schedule' && (
                 <div className="space-y-2">
-                  {scheduleList.map((item, idx) => {
-                    const isSelected = item.id === payload.activeItemId;
-                    return (
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                    <span className="text-xs font-bold text-slate-400">
+                      {scheduleList.length} items in Run-of-Show
+                    </span>
+                    {scheduleList.length > 0 && (
                       <button
-                        key={item.id}
                         onClick={() => {
-                          dispatchRemoteAction({ action: 'SELECT_ITEM', itemId: item.id });
-                          setControllerTab('slides');
+                          if (
+                            window.confirm(
+                              'Are you sure you want to remove ALL items from the Schedule?'
+                            )
+                          ) {
+                            dispatchRemoteAction({ action: 'CLEAR_SCHEDULE' });
+                            triggerRemoteNotice('Cleared all schedule items');
+                          }
                         }}
-                        className={`w-full text-left p-3 rounded-xl border transition flex items-center justify-between gap-3 ${
-                          isSelected
-                            ? 'bg-emerald-950/30 border-emerald-500 text-white'
-                            : 'bg-slate-900/80 border-slate-800 text-slate-200 hover:border-slate-700'
-                        }`}
+                        className="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-[11px] font-black flex items-center gap-1"
+                        title="Remove all items from schedule"
                       >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <span className="w-7 h-7 rounded-lg bg-slate-800 text-slate-300 font-mono text-xs font-bold flex items-center justify-center shrink-0">
-                            {idx + 1}
-                          </span>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-slate-800 text-amber-400">
-                                {item.type}
-                              </span>
-                              <span className="text-[11px] text-slate-400">
-                                {item.slideCount} slides
-                              </span>
+                        <Trash2 className="w-3 h-3" />
+                        <span>Clear All</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {scheduleList.length === 0 ? (
+                    <div className="p-8 text-center text-slate-500 space-y-2">
+                      <Layers className="w-8 h-8 mx-auto text-slate-600" />
+                      <p className="text-xs font-bold text-slate-400">Schedule is Empty</p>
+                      <p className="text-[11px] text-slate-500">
+                        Use the "Add to Schedule" tab to remotely add songs or Bible verses.
+                      </p>
+                    </div>
+                  ) : (
+                    scheduleList.map((item, idx) => {
+                      const isSelected = item.id === payload.activeItemId;
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => {
+                            dispatchRemoteAction({ action: 'SELECT_ITEM', itemId: item.id });
+                            setControllerTab('slides');
+                          }}
+                          className={`w-full text-left p-3 rounded-xl border transition flex items-center justify-between gap-3 cursor-pointer ${
+                            isSelected
+                              ? 'bg-emerald-950/30 border-emerald-500 text-white'
+                              : 'bg-slate-900/80 border-slate-800 text-slate-200 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className="w-7 h-7 rounded-lg bg-slate-800 text-slate-300 font-mono text-xs font-bold flex items-center justify-center shrink-0">
+                              {idx + 1}
+                            </span>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-slate-800 text-amber-400">
+                                  {item.type}
+                                </span>
+                                <span className="text-[11px] text-slate-400">
+                                  {item.slideCount} slides
+                                </span>
+                              </div>
+                              <h4 className="text-sm font-bold text-white truncate mt-0.5">
+                                {item.title}
+                              </h4>
+                              {item.subtitle && (
+                                <p className="text-xs text-slate-400 truncate">{item.subtitle}</p>
+                              )}
                             </div>
-                            <h4 className="text-sm font-bold text-white truncate mt-0.5">
-                              {item.title}
-                            </h4>
-                            {item.subtitle && (
-                              <p className="text-xs text-slate-400 truncate">{item.subtitle}</p>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            {isSelected ? (
+                              <span className="px-2.5 py-1 rounded-lg bg-emerald-500 text-slate-950 font-black text-[10px] uppercase">
+                                LIVE
+                              </span>
+                            ) : (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  dispatchRemoteAction({ action: 'SELECT_ITEM', itemId: item.id });
+                                  setControllerTab('slides');
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 font-bold text-xs flex items-center gap-1"
+                              >
+                                <Play className="w-3 h-3 fill-current" />
+                              </button>
                             )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                dispatchRemoteAction({
+                                  action: 'DELETE_SCHEDULE_ITEM',
+                                  itemId: item.id,
+                                });
+                                triggerRemoteNotice(`Removed "${item.title}" from Schedule`);
+                              }}
+                              className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30"
+                              title="Remove item from Schedule"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
-
-                        <div className="shrink-0">
-                          {isSelected ? (
-                            <span className="px-2.5 py-1 rounded-lg bg-emerald-500 text-slate-950 font-black text-[10px] uppercase">
-                              LIVE NOW
-                            </span>
-                          ) : (
-                            <span className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 font-bold text-xs flex items-center gap-1">
-                              <Play className="w-3 h-3 fill-current" /> Project
-                            </span>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                 </div>
               )}
 

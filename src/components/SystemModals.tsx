@@ -40,8 +40,12 @@ export const APP_CHANGELOG: ChangelogItem[] = [
     version: '1.1.2',
     date: 'November 9, 2026',
     platform: 'Windows & Android',
-    title: 'Built-in 5 Bible Translations, 9 Classic Hymns & Universal Importer Fix',
+    title: '5 Built-in Bibles, 9 Classic Hymns, Schedule Clear/Delete & Importer Fixes',
     highlights: [
+      'Full Schedule Deletion & Clear All: Allowed removing any item (including the last item) and added a 1-click "Clear All" button with checkbox confirmation to completely clear the Run-of-Show.',
+      'Right-Click Schedule Menu: Right-click any schedule item to Project Live Now, Remove from Schedule, or Clear Entire Schedule.',
+      'Android Remote Schedule Management: Android Stage Controller can now delete individual schedule items and clear the entire schedule remotely.',
+      'Empty Schedule Reflow: Built graceful zero-item empty states and real-time broadcast reflow across all connected screens when schedule is empty.',
       'Built-in Scripture Translations: Integrated NIV, NASB, Magandang Balita Bibliya 1901 (MBB 1901), and ESV alongside KJV with 1-click full 66-book offline IndexedDB installation.',
       '9 Classic Hymns Added: Seeded complete lyrics, verses, choruses, and chords for To God Be The Glory, Wonderful Grace of Jesus, The Battle Hymn of Republic, Love Lifted Me, Stand up, Stand up for Jesus, Holy, Holy, Holy, The Banner of The Cross, The Fight is On, and Victory in Jesus.',
       'Universal Bible Importer Fix: Resolved round-trip import of exported FreeWorship Bible files (*.fwx.json), backup archives, and multi-translation bundles without structure errors.',
@@ -394,7 +398,7 @@ export const WelcomeAboutModal: React.FC<WelcomeAboutModalProps> = ({
 
   const handleDownloadAndInstallUpdate = async () => {
     const defaultWinUrl =
-      'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.1/FreeWorship.Studio-Setup-1.1.1.exe';
+      'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.2/FreeWorship.Studio-Setup-1.1.2.exe';
     const targetUrl =
       updateStatus.downloadUrl || (isAndroid ? GITHUB_RAW_APK_URL : defaultWinUrl);
 

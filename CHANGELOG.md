@@ -7,6 +7,12 @@ All notable changes to the **FreeWorship Studio** (Windows Desktop Presentation 
 ## [1.1.2] — November 9, 2026
 
 ### 🚀 Highlights & Major Features
+- **Schedule Item Deletion & Clear All**:
+  - Fixed issue where the user could not delete the last remaining item in the schedule (`schedule.length <= 1`).
+  - Added a **"Clear All"** button in the Service Schedule header with a checkbox agreement confirmation dialog to safely wipe the Run-of-Show when needed.
+  - Added right-click context menu options on schedule items: `Project Live Now`, `Remove from Schedule`, and `Clear Entire Schedule...`.
+  - Android Stage Controller users can now remove individual items and clear the whole schedule remotely via LAN.
+  - Added graceful empty states and zero-latency broadcast reflow across all connected screens when the schedule has 0 items.
 - **Built-in 5 Bible Translations**: Added full built-in support for **KJV** (King James Version), **NIV** (New International Version), **NASB** (New American Standard Bible), **MBB 1901** (Magandang Balita Bibliya 1901 / Ang Biblia 1901 Tagalog), and **ESV** (English Standard Version). Every translation has pre-seeded core sanctuary verses and a 1-click installer to download and permanently store all 31,102 verses offline into IndexedDB.
 - **9 Classic Built-in Hymns Added**: Added the requested classic hymns with complete stanzas, choruses, and chord notations:
   1. *To God Be The Glory*
