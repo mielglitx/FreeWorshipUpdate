@@ -27,6 +27,27 @@ export const GITHUB_RAW_UPDATES_URL =
 export const GITHUB_RAW_APK_URL =
   'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.2/FreeWorship-StageController.apk';
 
+/**
+ * Semver comparison: returns true ONLY if remoteVersion is strictly greater than currentVersion.
+ * Prevents downgrading or false update prompts when local version is newer or equal.
+ */
+export function isNewerVersion(remoteVersion: string, currentVersion: string): boolean {
+  if (!remoteVersion || !currentVersion) return false;
+  const parseParts = (v: string) =>
+    v.replace(/^v/i, '').split('.').map((p) => parseInt(p, 10) || 0);
+  const rParts = parseParts(remoteVersion);
+  const cParts = parseParts(currentVersion);
+
+  const maxLen = Math.max(rParts.length, cParts.length);
+  for (let i = 0; i < maxLen; i++) {
+    const r = rParts[i] || 0;
+    const c = cParts[i] || 0;
+    if (r > c) return true;
+    if (r < c) return false;
+  }
+  return false;
+}
+
 export interface ChangelogItem {
   version: string;
   date: string;
@@ -253,135 +274,101 @@ export const WelcomeAboutModal: React.FC<WelcomeAboutModalProps> = ({
     const targetPlat = isAndroid ? 'android' : 'windows';
 
     try {
-      // 1. First check official GitHub Releases API
-      const res = await fetch(GITHUB_RELEASES_API, {
-        headers: { Accept: 'application/vnd.github+json' },
-      });
-
-      if (res.ok) {
-        const release = await res.json();
-        const tag = String(release.tag_name || release.name || '').replace(/^v/i, '');
-        const assets: Array<{ name: string; browser_download_url: string }> =
-          release.assets || [];
-
-        let platformAssetUrl = '';
-        let matchedFileName = '';
-
-        if (targetPlat === 'android') {
-          const apkAsset = assets.find((a) => a.name.toLowerCase().endsWith('.apk'));
-          if (apkAsset) {
-            platformAssetUrl = apkAsset.browser_download_url;
-            matchedFileName = apkAsset.name;
-          } else {
-            platformAssetUrl = GITHUB_RAW_APK_URL;
-            matchedFileName = 'FreeWorship-StageController.apk';
-          }
-        } else {
-          const winAsset =
-            assets.find((a) => a.name.toLowerCase().includes('setup') && a.name.endsWith('.exe')) ||
-            assets.find((a) => a.name.endsWith('.exe'));
-          if (winAsset) {
-            platformAssetUrl = winAsset.browser_download_url;
-            matchedFileName = winAsset.name;
-          } else {
-            platformAssetUrl =
-              'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.1/FreeWorship.Studio-Setup-1.1.1.exe';
-            matchedFileName = 'FreeWorship Studio-Setup-1.1.1.exe';
-          }
+      // 1. Check updates.json manifest in repository (primary channel for repo updates)
+      let manifestPlat: any = null;
+      let manifestVersion = '';
+      try {
+        const manifestRes = await fetch(`${GITHUB_RAW_UPDATES_URL}?t=${Date.now()}`);
+        if (manifestRes.ok) {
+          const manifest = await manifestRes.json();
+          manifestPlat = targetPlat === 'android' ? manifest.android : manifest.windows;
+          manifestVersion = String(manifestPlat?.version || manifest.version || '').replace(/^v/i, '');
         }
-
-        if (tag && tag !== APP_VERSION) {
-          setUpdateStatus({
-            state: 'available',
-            targetPlatform: targetPlat,
-            latestVersion: tag,
-            downloadUrl: platformAssetUrl,
-            fileName: matchedFileName,
-            message: `New ${targetPlat === 'android' ? 'Android APK' : 'Windows Studio'} update v.${tag} is available!`,
-          });
-          setCheckingUpdate(false);
-          return;
-        } else {
-          setUpdateStatus({
-            state: 'up-to-date',
-            targetPlatform: targetPlat,
-            latestVersion: APP_VERSION,
-            downloadUrl: platformAssetUrl,
-            fileName: matchedFileName,
-            message: `${targetPlat === 'android' ? 'Android Remote' : 'Windows Studio'} is up to date (v.${APP_VERSION}).`,
-          });
-          setCheckingUpdate(false);
-          return;
-        }
+      } catch {
+        // manifest fetch failed, continue to other checks
       }
 
-      // 2. Fallback: check updates.json manifest in repository
-      const manifestRes = await fetch(GITHUB_RAW_UPDATES_URL);
-      if (manifestRes.ok) {
-        const manifest = await manifestRes.json();
-        const platInfo = targetPlat === 'android' ? manifest.android : manifest.windows;
-        const targetVersion = platInfo?.version || manifest.version || APP_VERSION;
-        const targetUrl =
+      // 2. Check official GitHub Releases API
+      let releaseTag = '';
+      let releaseAssetUrl = '';
+      let releaseFileName = '';
+      try {
+        const res = await fetch(GITHUB_RELEASES_API, {
+          headers: { Accept: 'application/vnd.github+json' },
+        });
+        if (res.ok) {
+          const release = await res.json();
+          releaseTag = String(release.tag_name || release.name || '').replace(/^v/i, '');
+          const assets: Array<{ name: string; browser_download_url: string }> = release.assets || [];
+
+          if (targetPlat === 'android') {
+            const apkAsset = assets.find((a) => a.name.toLowerCase().endsWith('.apk'));
+            if (apkAsset) {
+              releaseAssetUrl = apkAsset.browser_download_url;
+              releaseFileName = apkAsset.name;
+            }
+          } else {
+            const winAsset =
+              assets.find((a) => a.name.toLowerCase().includes('setup') && a.name.endsWith('.exe')) ||
+              assets.find((a) => a.name.endsWith('.exe'));
+            if (winAsset) {
+              releaseAssetUrl = winAsset.browser_download_url;
+              releaseFileName = winAsset.name;
+            }
+          }
+        }
+      } catch {
+        // release fetch failed
+      }
+
+      // Determine the highest available version among manifest and release tag
+      let highestRemoteVersion = '';
+      let bestDownloadUrl = '';
+      let bestFileName = '';
+
+      if (manifestVersion && isNewerVersion(manifestVersion, releaseTag)) {
+        highestRemoteVersion = manifestVersion;
+        bestDownloadUrl = manifestPlat?.downloadUrl || manifestPlat?.fallbackDownloadUrl || '';
+        bestFileName = manifestPlat?.fileName || '';
+      } else if (releaseTag) {
+        highestRemoteVersion = releaseTag;
+        bestDownloadUrl = releaseAssetUrl;
+        bestFileName = releaseFileName;
+      } else if (manifestVersion) {
+        highestRemoteVersion = manifestVersion;
+        bestDownloadUrl = manifestPlat?.downloadUrl || manifestPlat?.fallbackDownloadUrl || '';
+        bestFileName = manifestPlat?.fileName || '';
+      }
+
+      // Sensible fallbacks if download URL or filename was empty
+      if (!bestDownloadUrl) {
+        bestDownloadUrl =
           targetPlat === 'android'
-            ? platInfo?.downloadUrl || platInfo?.fallbackDownloadUrl || GITHUB_RAW_APK_URL
-            : platInfo?.downloadUrl ||
-              'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.1/FreeWorship.Studio-Setup-1.1.1.exe';
-
-        if (targetVersion && targetVersion !== APP_VERSION) {
-          setUpdateStatus({
-            state: 'available',
-            targetPlatform: targetPlat,
-            latestVersion: targetVersion,
-            downloadUrl: targetUrl,
-            fileName: platInfo?.fileName,
-            message: `New ${targetPlat === 'android' ? 'Android APK' : 'Windows Studio'} version v.${targetVersion} is ready!`,
-          });
-        } else {
-          setUpdateStatus({
-            state: 'up-to-date',
-            targetPlatform: targetPlat,
-            latestVersion: APP_VERSION,
-            downloadUrl: targetUrl,
-            fileName: platInfo?.fileName,
-            message: `${targetPlat === 'android' ? 'Android Remote' : 'Windows Studio'} is up to date (v.${APP_VERSION}).`,
-          });
-        }
-        setCheckingUpdate(false);
-        return;
+            ? GITHUB_RAW_APK_URL
+            : `https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v${highestRemoteVersion || APP_VERSION}/FreeWorship.Studio-Setup-${highestRemoteVersion || APP_VERSION}.exe`;
+      }
+      if (!bestFileName) {
+        bestFileName = targetPlat === 'android' ? 'FreeWorship-StageController.apk' : `FreeWorship Studio-Setup-${highestRemoteVersion || APP_VERSION}.exe`;
       }
 
-      // 3. Fallback: check package.json in repository
-      const pkgRes = await fetch(
-        'https://raw.githubusercontent.com/mielglitx/FreeWorshipUpdate/main/package.json'
-      );
-      if (pkgRes.ok) {
-        const pkg = await pkgRes.json();
-        if (pkg.version && pkg.version !== APP_VERSION) {
-          setUpdateStatus({
-            state: 'available',
-            targetPlatform: targetPlat,
-            latestVersion: pkg.version,
-            downloadUrl:
-              targetPlat === 'android'
-                ? GITHUB_RAW_APK_URL
-                : 'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.1/FreeWorship.Studio-Setup-1.1.1.exe',
-            message: `New version v.${pkg.version} is available in update repo!`,
-          });
-        } else {
-          setUpdateStatus({
-            state: 'up-to-date',
-            targetPlatform: targetPlat,
-            latestVersion: APP_VERSION,
-            downloadUrl: GITHUB_UPDATE_REPO,
-            message: `${targetPlat === 'android' ? 'Android Remote' : 'Windows Studio'} is up to date (v.${APP_VERSION}).`,
-          });
-        }
+      // Crucial: Only prompt an update if remote is STRICTLY newer than local APP_VERSION
+      if (highestRemoteVersion && isNewerVersion(highestRemoteVersion, APP_VERSION)) {
+        setUpdateStatus({
+          state: 'available',
+          targetPlatform: targetPlat,
+          latestVersion: highestRemoteVersion,
+          downloadUrl: bestDownloadUrl,
+          fileName: bestFileName,
+          message: `New ${targetPlat === 'android' ? 'Android APK' : 'Windows Studio'} update v.${highestRemoteVersion} is available!`,
+        });
       } else {
         setUpdateStatus({
           state: 'up-to-date',
           targetPlatform: targetPlat,
-          downloadUrl: GITHUB_UPDATE_REPO,
-          message: 'Connected to official update repository.',
+          latestVersion: APP_VERSION,
+          downloadUrl: bestDownloadUrl,
+          fileName: bestFileName,
+          message: `${targetPlat === 'android' ? 'Android Remote' : 'Windows Studio'} is up to date (v.${APP_VERSION}).`,
         });
       }
     } catch {
@@ -729,7 +716,7 @@ export const WelcomeAboutModal: React.FC<WelcomeAboutModalProps> = ({
                       className={`px-3.5 py-2 font-black text-xs uppercase flex items-center gap-2 shadow-md shrink-0 transition ${
                         updateStatus.state === 'available'
                           ? 'bg-amber-500 hover:bg-amber-400 text-black animate-pulse'
-                          : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                          : 'bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-500/50'
                       }`}
                     >
                       {installingUpdate ? (
@@ -737,17 +724,22 @@ export const WelcomeAboutModal: React.FC<WelcomeAboutModalProps> = ({
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
                           <span>Installing...</span>
                         </>
-                      ) : (
+                      ) : updateStatus.state === 'available' ? (
                         <>
                           <Download className="w-3.5 h-3.5" />
                           <span>
-                            {updateStatus.state === 'available'
-                              ? isAndroid
-                                ? 'Download & Install APK Now'
-                                : 'Download & Install Windows Update'
-                              : isAndroid
-                                ? 'Reinstall Latest APK'
-                                : 'Download & Install Setup'}
+                            {isAndroid
+                              ? 'Download & Install APK Now'
+                              : 'Download & Install Windows Update'}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>
+                            {isAndroid
+                              ? 'Up to Date • Reinstall APK'
+                              : 'Up to Date • Reinstall Setup'}
                           </span>
                         </>
                       )}
