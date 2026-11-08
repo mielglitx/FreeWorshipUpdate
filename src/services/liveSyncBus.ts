@@ -91,6 +91,8 @@ declare global {
       onStateSync: (callback: (payload: LiveBroadcastPayload) => void) => () => void;
       onRemoteCommand?: (callback: (command: RemoteControlAction) => void) => () => void;
       onWindowStatus: (callback: (status: any) => void) => () => void;
+      downloadAndInstallUpdate?: (url: string) => Promise<{ ok: boolean; error?: string }>;
+      onUpdateDownloadProgress?: (callback: (progress: { percent: number; bytesReceived: number; totalBytes: number; stage?: string }) => void) => () => void;
     };
   }
 }

@@ -1,8 +1,10 @@
 const { app, BrowserWindow, screen, ipcMain } = require('electron');
 const path = require('path');
 const http = require('http');
+const https = require('https');
 const os = require('os');
 const fs = require('fs');
+const { spawn } = require('child_process');
 
 let operatorWindow = null;
 let projectorWindow = null;
@@ -521,6 +523,121 @@ app.whenReady().then(() => {
         win.webContents.send('freeworship:state-sync', payload);
       }
     });
+  });
+
+  ipcMain.handle('freeworship:download-and-install-update', async (_event, updateUrl) => {
+    if (!updateUrl) {
+      return { ok: false, error: 'No update URL provided' };
+    }
+
+    const tempDir = app.getPath('temp');
+    const installerPath = path.join(tempDir, 'FreeWorship Studio-Setup-Update.exe');
+
+    const downloadFile = (targetUrl) => {
+      return new Promise((resolve, reject) => {
+        const fetchUrl = (currentUrl, redirects = 0) => {
+          if (redirects > 10) {
+            reject(new Error('Too many redirects while downloading update'));
+            return;
+          }
+
+          const client = currentUrl.startsWith('https:') ? https : http;
+          const req = client.get(currentUrl, {
+            headers: {
+              'User-Agent': 'FreeWorship-Windows-Updater',
+            },
+          }, (res) => {
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+              let nextUrl = res.headers.location;
+              if (!nextUrl.startsWith('http')) {
+                const parsed = new URL(currentUrl);
+                nextUrl = new URL(nextUrl, parsed.origin).toString();
+              }
+              fetchUrl(nextUrl, redirects + 1);
+              return;
+            }
+
+            if (res.statusCode !== 200) {
+              reject(new Error(`Server returned HTTP ${res.statusCode}: ${res.statusMessage}`));
+              return;
+            }
+
+            const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
+            let bytesReceived = 0;
+            let lastPercent = -1;
+
+            const fileStream = fs.createWriteStream(installerPath);
+
+            res.on('data', (chunk) => {
+              bytesReceived += chunk.length;
+              fileStream.write(chunk);
+
+              if (totalBytes > 0) {
+                const percent = Math.floor((bytesReceived / totalBytes) * 100);
+                if (percent !== lastPercent) {
+                  lastPercent = percent;
+                  if (operatorWindow && !operatorWindow.isDestroyed()) {
+                    operatorWindow.webContents.send('freeworship:update-download-progress', {
+                      percent,
+                      bytesReceived,
+                      totalBytes,
+                      stage: 'downloading',
+                    });
+                  }
+                }
+              }
+            });
+
+            res.on('end', () => {
+              fileStream.end(() => {
+                if (operatorWindow && !operatorWindow.isDestroyed()) {
+                  operatorWindow.webContents.send('freeworship:update-download-progress', {
+                    percent: 100,
+                    bytesReceived,
+                    totalBytes: bytesReceived,
+                    stage: 'installing',
+                  });
+                }
+                resolve(installerPath);
+              });
+            });
+
+            res.on('error', (err) => {
+              fileStream.close();
+              try { fs.unlinkSync(installerPath); } catch {}
+              reject(err);
+            });
+          });
+
+          req.on('error', (err) => {
+            reject(err);
+          });
+        };
+
+        fetchUrl(targetUrl);
+      });
+    };
+
+    try {
+      const downloadedExe = await downloadFile(updateUrl);
+
+      // Launch the NSIS installer detached so it runs independently
+      const child = spawn(downloadedExe, [], {
+        detached: true,
+        stdio: 'ignore',
+      });
+      child.unref();
+
+      // Exit current Electron app cleanly after 1 second so NSIS can overwrite files
+      setTimeout(() => {
+        app.quit();
+      }, 1000);
+
+      return { ok: true, path: downloadedExe };
+    } catch (err) {
+      console.error('Update download/install error:', err);
+      return { ok: false, error: err.message };
+    }
   });
 
   screen.on('display-added', notifyWindowStatus);

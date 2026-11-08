@@ -12,9 +12,12 @@ import {
   Sparkles,
   Trash2,
   X,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
 
-export const APP_VERSION = '1.1.0';
+export const APP_VERSION = '1.1.1';
 export const APP_RELEASE_DATE = 'November 8, 2026';
 export const GITHUB_UPDATE_REPO = 'https://github.com/mielglitx/FreeWorshipUpdate';
 export const GITHUB_RELEASES_API =
@@ -22,7 +25,7 @@ export const GITHUB_RELEASES_API =
 export const GITHUB_RAW_UPDATES_URL =
   'https://raw.githubusercontent.com/mielglitx/FreeWorshipUpdate/main/updates.json';
 export const GITHUB_RAW_APK_URL =
-  'https://github.com/mielglitx/FreeWorshipUpdate/raw/main/FreeWorship-StageController.apk';
+  'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.1/FreeWorship-StageController.apk';
 
 export interface ChangelogItem {
   version: string;
@@ -33,6 +36,20 @@ export interface ChangelogItem {
 }
 
 export const APP_CHANGELOG: ChangelogItem[] = [
+  {
+    version: '1.1.1',
+    date: 'November 8, 2026',
+    platform: 'Windows & Android',
+    title: 'In-App Direct Updates & Universal Bible/Song Importers',
+    highlights: [
+      'In-App One-Click Updates: Both Windows and Android apps now directly download and launch update installation inside the app.',
+      'Windows Electron Auto-Installer: Downloads setup package with real-time percentage progress bar and automatically restarts FreeWorship Studio.',
+      'Android Native Package Installer: Native ApkUpdater plugin downloads the latest APK and immediately opens the system package installer.',
+      'Universal Bible Importer: Full round-trip support for exported FreeWorship Bible archives (*.fwx.json), multi-translation bundles, and Zefania/XML scriptures.',
+      'Universal Song Importer: Robust parsing for FreeWorship song backup bundles, raw song arrays (with/without musicalKey), single-song JSON, and OpenLyrics XML.',
+      'Live Download Progress: Visual percentage bar showing streamed megabytes and total size during update installation.',
+    ],
+  },
   {
     version: '1.1.0',
     date: 'November 8, 2026',
@@ -188,6 +205,15 @@ export const WelcomeAboutModal: React.FC<WelcomeAboutModalProps> = ({
   });
 
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [installingUpdate, setInstallingUpdate] = useState(false);
+  const [installProgress, setInstallProgress] = useState<{
+    percent: number;
+    bytesReceived?: number;
+    totalBytes?: number;
+    statusText?: string;
+  } | null>(null);
+  const [installError, setInstallError] = useState<string | null>(null);
+
   const [updateStatus, setUpdateStatus] = useState<{
     state: 'idle' | 'up-to-date' | 'available' | 'error';
     targetPlatform: 'windows' | 'android';
@@ -206,6 +232,7 @@ export const WelcomeAboutModal: React.FC<WelcomeAboutModalProps> = ({
 
   const checkForUpdatesFromGitHub = async () => {
     setCheckingUpdate(true);
+    setInstallError(null);
     const targetPlat = isAndroid ? 'android' : 'windows';
 
     try {
@@ -240,8 +267,9 @@ export const WelcomeAboutModal: React.FC<WelcomeAboutModalProps> = ({
             platformAssetUrl = winAsset.browser_download_url;
             matchedFileName = winAsset.name;
           } else {
-            platformAssetUrl = `${GITHUB_UPDATE_REPO}/releases/latest`;
-            matchedFileName = 'FreeWorship-Studio-Setup.exe';
+            platformAssetUrl =
+              'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.1/FreeWorship.Studio-Setup-1.1.1.exe';
+            matchedFileName = 'FreeWorship Studio-Setup-1.1.1.exe';
           }
         }
 
@@ -252,7 +280,7 @@ export const WelcomeAboutModal: React.FC<WelcomeAboutModalProps> = ({
             latestVersion: tag,
             downloadUrl: platformAssetUrl,
             fileName: matchedFileName,
-            message: `New ${targetPlat === 'android' ? 'Android APK' : 'Windows'} update v.${tag} is available!`,
+            message: `New ${targetPlat === 'android' ? 'Android APK' : 'Windows Studio'} update v.${tag} is available!`,
           });
           setCheckingUpdate(false);
           return;
@@ -263,7 +291,7 @@ export const WelcomeAboutModal: React.FC<WelcomeAboutModalProps> = ({
             latestVersion: APP_VERSION,
             downloadUrl: platformAssetUrl,
             fileName: matchedFileName,
-            message: `${targetPlat === 'android' ? 'Android APK' : 'Windows Studio'} is up to date (v.${APP_VERSION}).`,
+            message: `${targetPlat === 'android' ? 'Android Remote' : 'Windows Studio'} is up to date (v.${APP_VERSION}).`,
           });
           setCheckingUpdate(false);
           return;
@@ -279,7 +307,8 @@ export const WelcomeAboutModal: React.FC<WelcomeAboutModalProps> = ({
         const targetUrl =
           targetPlat === 'android'
             ? platInfo?.downloadUrl || platInfo?.fallbackDownloadUrl || GITHUB_RAW_APK_URL
-            : platInfo?.downloadUrl || `${GITHUB_UPDATE_REPO}/releases`;
+            : platInfo?.downloadUrl ||
+              'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.1/FreeWorship.Studio-Setup-1.1.1.exe';
 
         if (targetVersion && targetVersion !== APP_VERSION) {
           setUpdateStatus({
@@ -288,7 +317,7 @@ export const WelcomeAboutModal: React.FC<WelcomeAboutModalProps> = ({
             latestVersion: targetVersion,
             downloadUrl: targetUrl,
             fileName: platInfo?.fileName,
-            message: `New ${targetPlat === 'android' ? 'Android APK' : 'Windows'} version v.${targetVersion} is ready!`,
+            message: `New ${targetPlat === 'android' ? 'Android APK' : 'Windows Studio'} version v.${targetVersion} is ready!`,
           });
         } else {
           setUpdateStatus({
@@ -316,7 +345,9 @@ export const WelcomeAboutModal: React.FC<WelcomeAboutModalProps> = ({
             targetPlatform: targetPlat,
             latestVersion: pkg.version,
             downloadUrl:
-              targetPlat === 'android' ? GITHUB_RAW_APK_URL : `${GITHUB_UPDATE_REPO}/releases`,
+              targetPlat === 'android'
+                ? GITHUB_RAW_APK_URL
+                : 'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.1/FreeWorship.Studio-Setup-1.1.1.exe',
             message: `New version v.${pkg.version} is available in update repo!`,
           });
         } else {
@@ -345,6 +376,108 @@ export const WelcomeAboutModal: React.FC<WelcomeAboutModalProps> = ({
       });
     } finally {
       setCheckingUpdate(false);
+    }
+  };
+
+  const handleDownloadAndInstallUpdate = async () => {
+    const defaultWinUrl =
+      'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.1/FreeWorship.Studio-Setup-1.1.1.exe';
+    const targetUrl =
+      updateStatus.downloadUrl || (isAndroid ? GITHUB_RAW_APK_URL : defaultWinUrl);
+
+    setInstallingUpdate(true);
+    setInstallError(null);
+    setInstallProgress({ percent: 0, statusText: 'Connecting to update download server...' });
+
+    try {
+      if (isAndroid) {
+        const apkUpdater = (window as any).Capacitor?.Plugins?.ApkUpdater;
+        if (apkUpdater && typeof apkUpdater.downloadAndInstall === 'function') {
+          let removeListener: (() => void) | null = null;
+          if (typeof apkUpdater.addListener === 'function') {
+            const handle = await apkUpdater.addListener('downloadProgress', (data: any) => {
+              const mbRead = ((data.bytesRead || 0) / 1048576).toFixed(1);
+              const mbTotal = ((data.totalBytes || 0) / 1048576).toFixed(1);
+              setInstallProgress({
+                percent: data.percent || 0,
+                bytesReceived: data.bytesRead,
+                totalBytes: data.totalBytes,
+                statusText:
+                  data.percent >= 100
+                    ? 'Download complete! Launching Android package installer...'
+                    : `Downloading APK: ${data.percent}% (${mbRead} MB / ${mbTotal} MB)`,
+              });
+            });
+            removeListener = () => handle?.remove?.();
+          }
+
+          setInstallProgress({ percent: 0, statusText: 'Starting background APK download...' });
+          const res = await apkUpdater.downloadAndInstall({ url: targetUrl });
+          if (removeListener) removeListener();
+
+          if (res?.success) {
+            setInstallProgress({
+              percent: 100,
+              statusText: 'Android package installer opened! Tap Install to update.',
+            });
+          }
+        } else {
+          // Fallback in web browser mode on Android
+          setInstallProgress({ percent: 100, statusText: 'Starting browser download...' });
+          const link = document.createElement('a');
+          link.href = targetUrl;
+          link.download = 'FreeWorship-StageController.apk';
+          link.target = '_blank';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+      } else {
+        // Windows Desktop
+        const desktop = typeof window !== 'undefined' ? (window as any).freeworshipDesktop : null;
+        if (desktop?.downloadAndInstallUpdate) {
+          let unsubProgress: (() => void) | undefined;
+          if (desktop.onUpdateDownloadProgress) {
+            unsubProgress = desktop.onUpdateDownloadProgress((prog: any) => {
+              const mbRead = ((prog.bytesReceived || 0) / 1048576).toFixed(1);
+              const mbTotal = ((prog.totalBytes || 0) / 1048576).toFixed(1);
+              setInstallProgress({
+                percent: prog.percent,
+                bytesReceived: prog.bytesReceived,
+                totalBytes: prog.totalBytes,
+                statusText:
+                  prog.stage === 'installing' || prog.percent >= 100
+                    ? 'Download complete! Closing FreeWorship and launching Setup installer...'
+                    : `Downloading Windows Setup: ${prog.percent}% (${mbRead} MB / ${mbTotal} MB)`,
+              });
+            });
+          }
+
+          setInstallProgress({ percent: 0, statusText: 'Downloading update from GitHub...' });
+          const res = await desktop.downloadAndInstallUpdate(targetUrl);
+          if (unsubProgress) unsubProgress();
+
+          if (!res.ok) {
+            throw new Error(res.error || 'Failed to download or launch Windows update installer.');
+          } else {
+            setInstallProgress({
+              percent: 100,
+              statusText: 'Setup installer started! Relaunching FreeWorship...',
+            });
+          }
+        } else {
+          // Fallback if desktop bridge is not found (browser preview)
+          window.open(targetUrl, '_blank');
+          setInstallProgress({
+            percent: 100,
+            statusText: 'Download opened in web browser.',
+          });
+        }
+      }
+    } catch (err: any) {
+      console.error('Update install error:', err);
+      setInstallError(err.message || 'An error occurred during update download.');
+      setInstallingUpdate(false);
     }
   };
 
@@ -522,56 +655,103 @@ export const WelcomeAboutModal: React.FC<WelcomeAboutModalProps> = ({
                   </div>
                 </div>
 
-                {updateStatus.message ? (
-                  <div className="p-2.5 bg-booth-900 border border-booth-800 flex items-center justify-between gap-2 flex-wrap">
-                    <span className="text-[11px] text-slate-200 font-mono">
-                      {updateStatus.message}
-                    </span>
-                    {updateStatus.state === 'available' ? (
-                      <a
-                        href={
-                          updateStatus.downloadUrl ||
-                          (isAndroid ? GITHUB_RAW_APK_URL : `${GITHUB_UPDATE_REPO}/releases`)
-                        }
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs uppercase flex items-center gap-1.5 shadow-md shrink-0 animate-pulse"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>
-                          {isAndroid ? 'Download New APK' : 'Download Windows Update'}
-                        </span>
-                      </a>
-                    ) : (
-                      <a
-                        href={isAndroid ? GITHUB_RAW_APK_URL : `${GITHUB_UPDATE_REPO}/releases`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-2.5 py-1 bg-booth-850 hover:bg-booth-800 border border-booth-700 text-slate-300 font-bold text-[10px] flex items-center gap-1 shrink-0"
-                      >
-                        <Download className="w-3 h-3" />
-                        <span>
-                          {isAndroid ? 'Download Latest APK' : 'Download Windows Setup'}
-                        </span>
-                      </a>
-                    )}
-                  </div>
-                ) : (
-                  <div className="p-2.5 bg-booth-900 border border-booth-800 flex items-center justify-between gap-2">
-                    <span className="text-[11px] text-slate-400 font-mono">
-                      Current version: v.{APP_VERSION} ({isAndroid ? 'Android Remote' : 'Windows Studio'})
-                    </span>
-                    <a
-                      href={isAndroid ? GITHUB_RAW_APK_URL : `${GITHUB_UPDATE_REPO}/releases`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="px-2.5 py-1 bg-booth-850 hover:bg-booth-800 border border-booth-700 text-slate-300 font-bold text-[10px] flex items-center gap-1 shrink-0"
-                    >
-                      <Download className="w-3 h-3" />
-                      <span>{isAndroid ? 'Download Latest APK' : 'Download Windows Setup'}</span>
-                    </a>
+                {/* Download Progress Bar (Real-Time in Electron & Android) */}
+                {installingUpdate && installProgress && (
+                  <div className="p-3 bg-booth-900 border-2 border-amber-500/60 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                        <span>{installProgress.statusText || 'Downloading update...'}</span>
+                      </span>
+                      <span className="font-mono font-black text-amber-400 text-sm">
+                        {installProgress.percent}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-booth-950 border border-amber-500/30 h-2.5 overflow-hidden">
+                      <div
+                        className="bg-gradient-to-r from-amber-500 to-emerald-400 h-full transition-all duration-150"
+                        style={{ width: `${installProgress.percent}%` }}
+                      />
+                    </div>
                   </div>
                 )}
+
+                {/* Error Banner if Download/Install Fails */}
+                {installError && (
+                  <div className="p-2.5 bg-rose-950/60 border border-rose-600/70 text-rose-300 text-xs flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                      <span>{installError}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleDownloadAndInstallUpdate}
+                      className="px-2 py-1 bg-rose-600 hover:bg-rose-500 text-white font-bold text-[10px] uppercase shrink-0"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
+
+                {/* Status and Action Buttons */}
+                <div className="p-3 bg-booth-900 border border-booth-800 space-y-2.5">
+                  <div className="flex items-center justify-between gap-2 flex-wrap text-[11px] font-mono">
+                    <span className="text-slate-300">
+                      {updateStatus.message || `Current version: v.${APP_VERSION} (${isAndroid ? 'Android Remote' : 'Windows Studio'})`}
+                    </span>
+                    <span className="text-slate-400">
+                      {isAndroid ? 'Target: FreeWorship-StageController.apk' : 'Target: FreeWorship Studio-Setup.exe'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 flex-wrap pt-1 border-t border-booth-800">
+                    <button
+                      type="button"
+                      onClick={handleDownloadAndInstallUpdate}
+                      disabled={installingUpdate}
+                      className={`px-3.5 py-2 font-black text-xs uppercase flex items-center gap-2 shadow-md shrink-0 transition ${
+                        updateStatus.state === 'available'
+                          ? 'bg-amber-500 hover:bg-amber-400 text-black animate-pulse'
+                          : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                      }`}
+                    >
+                      {installingUpdate ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Installing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-3.5 h-3.5" />
+                          <span>
+                            {updateStatus.state === 'available'
+                              ? isAndroid
+                                ? 'Download & Install APK Now'
+                                : 'Download & Install Windows Update'
+                              : isAndroid
+                                ? 'Reinstall Latest APK'
+                                : 'Download & Install Setup'}
+                          </span>
+                        </>
+                      )}
+                    </button>
+
+                    <a
+                      href={
+                        updateStatus.downloadUrl ||
+                        (isAndroid
+                          ? GITHUB_RAW_APK_URL
+                          : 'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.1/FreeWorship.Studio-Setup-1.1.1.exe')
+                      }
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-2.5 py-1.5 bg-booth-850 hover:bg-booth-800 border border-booth-700 text-slate-300 hover:text-white font-bold text-[11px] flex items-center gap-1.5"
+                    >
+                      <span>Manual Browser Link</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                </div>
               </div>
             </>
           )}

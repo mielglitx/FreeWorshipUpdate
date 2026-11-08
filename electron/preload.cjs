@@ -22,4 +22,10 @@ contextBridge.exposeInMainWorld('freeworshipDesktop', {
     ipcRenderer.on('freeworship:window-status', listener);
     return () => ipcRenderer.removeListener('freeworship:window-status', listener);
   },
+  downloadAndInstallUpdate: (url) => ipcRenderer.invoke('freeworship:download-and-install-update', url),
+  onUpdateDownloadProgress: (callback) => {
+    const listener = (_event, progress) => callback(progress);
+    ipcRenderer.on('freeworship:update-download-progress', listener);
+    return () => ipcRenderer.removeListener('freeworship:update-download-progress', listener);
+  },
 });

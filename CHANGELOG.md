@@ -6,10 +6,12 @@ All notable changes to the **FreeWorship Studio** (Windows Desktop Presentation 
 
 ## [1.1.1] — November 8, 2026
 
-### 🚀 Highlights & Bug Fixes
+### 🚀 Highlights & Major Features
+- **In-App Windows Updater**: Seamlessly downloads the setup executable directly from GitHub inside the desktop app with real-time percentage and byte progress, automatically launches the installer detached, and cleanly restarts FreeWorship Studio.
+- **In-App Android APK Installer**: Built a native Capacitor plugin (`ApkUpdater`) that downloads the latest APK to application cache and directly invokes Android's native package installer (`application/vnd.android.package-archive` via `FileProvider` and `REQUEST_INSTALL_PACKAGES`) with zero manual browsing.
 - **Universal Bible Importer**: Full round-trip support for exported FreeWorship Bible JSON files (`format: 'freeworship-backup-v1'`), multi-translation bundles, and direct `{ "KJV": [...] }` maps. Single and multi-translation files are safely installed to offline IndexedDB storage.
 - **Universal Song Importer**: Hardened song file parser to accept FreeWorship Song JSON exports, raw song arrays (with or without `musicalKey`), single-song JSON files, OpenLyrics XML, OpenSong XML, ChordPro, and plain text. Added user notification alerts when songs are imported.
-- **Direct GitHub Update Downloads**: Added permanent direct download buttons on the About dialog for `FreeWorship-StageController.apk` (Android) and Windows installers so operators can re-download or update at any time.
+- **Direct GitHub Update Channel**: Added permanent direct download and install buttons on the About dialog for `FreeWorship-StageController.apk` (Android) and Windows installers so operators can re-download or update at any time.
 - **Automatic Background Update Checking**: Checks for new releases upon opening the About dialog.
 
 ---
