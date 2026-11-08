@@ -24,6 +24,7 @@ All notable changes to the **FreeWorship Studio** (Windows Desktop Presentation 
   - Right-click context menus with `Add to Schedule`, `Project Live`, `Set as Default Logo`, and `Delete`.
   - Native Drag-and-Drop from Songs, Bible Verses, and Media directly into the Service Schedule.
 - **Complete Import/Export Studio**: Full JSON & XML data backup and restore capabilities for songs, bibles, schedules, and display settings.
+- **Universal Bible Importer Fix**: Resolved import issues when re-importing exported FreeWorship Bible files (`.fwx.json`), backup bundles with `bibles` dictionaries, multi-translation packages, or direct `{ "KJV": [...] }` maps. Both single and multi-translation files are parsed and saved to offline IndexedDB storage.
 
 ---
 

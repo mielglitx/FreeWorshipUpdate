@@ -266,6 +266,41 @@ export function parseBackupOrModuleJson(rawText: string): FreeWorshipBackupBundl
         settings: { themes: parsed as ThemeTemplate[] },
       };
     }
+    // Flat Bible verses array: [ { book, chapter, verse, text, translation } ]
+    if (first && (first.text || first.scripture) && (first.book || first.book_name)) {
+      const code = (first.translation || 'CUSTOM').toUpperCase();
+      return {
+        format: 'freeworship-backup-v1',
+        version: '1.0.0',
+        exportedAt: new Date().toISOString(),
+        scope: 'bibles',
+        bibles: { [code]: parsed as BibleVerse[] },
+      };
+    }
+  }
+
+  // Direct translation map: { "KJV": [ { book, chapter, verse, text } ], "WEB": [...] }
+  if (parsed && typeof parsed === 'object') {
+    const topKeys = Object.keys(parsed);
+    const nonMetaKeys = topKeys.filter(
+      (k) => !['format', 'version', 'exportedAt', 'scope', 'settings', 'themes', 'songs', 'schedule'].includes(k)
+    );
+    const isDirectBibleMap =
+      nonMetaKeys.length > 0 &&
+      nonMetaKeys.every((k) => Array.isArray(parsed[k])) &&
+      nonMetaKeys.some((k) => {
+        const arr = parsed[k];
+        return arr.length > 0 && (arr[0]?.text || arr[0]?.book || arr[0]?.scripture);
+      });
+    if (isDirectBibleMap) {
+      return {
+        format: 'freeworship-backup-v1',
+        version: '1.0.0',
+        exportedAt: new Date().toISOString(),
+        scope: 'bibles',
+        bibles: parsed as Record<string, BibleVerse[]>,
+      };
+    }
   }
 
   // Object with top-level keys

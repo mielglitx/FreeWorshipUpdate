@@ -39,7 +39,8 @@
         "Default Sanctuary Logo: Choose any media item to display as the organization logo when [L] Logo panic mode is active.",
         "Persistent 3rd Screen OFF: Stage Monitor disabled state is remembered across app restarts.",
         "Multi-Select & Drag-to-Schedule: Ctrl/Shift item multi-selection, right-click context menus, and drag-and-drop to service schedule.",
-        "Complete Backup Studio: Import and export songs, schedules, display routing, and offline 66-book Bibles."
+        "Complete Backup Studio: Import and export songs, schedules, display routing, and offline 66-book Bibles.",
+        "Universal Bible Importer Fix: Seamless round-trip import for exported FreeWorship Bible JSON files (including 'freeworship-backup-v1' bundles and multi-translation maps)."
       ]
     },
     {

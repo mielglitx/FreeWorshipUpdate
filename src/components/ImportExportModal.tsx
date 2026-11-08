@@ -180,18 +180,31 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
         } catch {}
       }
 
-      const { translationCode, verses } = parseBibleFile(text, file.name);
-      if (verses.length === 0) {
+      const { translationCode, verses, allTranslations } = parseBibleFile(text, file.name);
+      if (allTranslations && Object.keys(allTranslations).length > 0) {
+        for (const [code, tVerses] of Object.entries(allTranslations)) {
+          if (tVerses.length > 0) {
+            await onImportBibleTranslation(code, tVerses);
+          }
+        }
+        const primary = translationCode || Object.keys(allTranslations)[0];
+        setSelectedBibleToExport(primary);
+        const total = Object.values(allTranslations).reduce((acc, cur) => acc + cur.length, 0);
         setStatusMessage({
-          type: 'error',
-          text: 'No valid Bible verses found. Supported formats: FreeWorship JSON, Scrollmapper/Thiagobodruk JSON, Zefania XML, OpenSong XML.',
+          type: 'success',
+          text: `Installed Bible translation(s): ${Object.keys(allTranslations).join(', ')} (${total.toLocaleString()} verses saved offline).`,
         });
-      } else {
+      } else if (verses.length > 0) {
         await onImportBibleTranslation(translationCode, verses);
         setSelectedBibleToExport(translationCode);
         setStatusMessage({
           type: 'success',
           text: `Installed Bible "${translationCode}" (${verses.length.toLocaleString()} verses saved offline).`,
+        });
+      } else {
+        setStatusMessage({
+          type: 'error',
+          text: 'No valid Bible verses found. Supported formats: FreeWorship JSON, Scrollmapper/Thiagobodruk JSON, Zefania XML, OpenSong XML.',
         });
       }
     } catch (err) {

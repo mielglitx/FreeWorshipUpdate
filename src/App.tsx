@@ -989,16 +989,13 @@ const OperatorConsole: React.FC = () => {
       KJV: BIBLE_DATABASE.filter((v) => v.translation === 'KJV'),
       ...customBibles,
     };
-    delete map.WEB;
     return map;
   }, [customBibles]);
 
   const availableTranslations = useMemo(() => {
     const codes = new Set<string>(['KJV']);
     Object.keys(customBibles).forEach((c) => {
-      if (c.toUpperCase() !== 'WEB') {
-        codes.add(c);
-      }
+      codes.add(c);
     });
     return Array.from(codes);
   }, [customBibles]);
@@ -1066,16 +1063,30 @@ const OperatorConsole: React.FC = () => {
     setBibleImportStatus(`Parsing ${file.name}...`);
     try {
       const content = await file.text();
-      const { translationCode, verses } = parseBibleFile(content, file.name);
-      if (verses.length === 0) {
-        setBibleImportStatus('No valid verses found in file. Check JSON/XML structure.');
-      } else {
+      const { translationCode, verses, allTranslations } = parseBibleFile(content, file.name);
+
+      if (allTranslations && Object.keys(allTranslations).length > 0) {
+        for (const [code, tVerses] of Object.entries(allTranslations)) {
+          if (tVerses.length > 0) {
+            await saveBibleToIndexedDB(code, tVerses);
+          }
+        }
+        setCustomBibles((prev) => ({ ...prev, ...allTranslations }));
+        const primaryCode = translationCode || Object.keys(allTranslations)[0];
+        setSelectedTranslation(primaryCode);
+        const totalCount = Object.values(allTranslations).reduce((acc, cur) => acc + cur.length, 0);
+        setBibleImportStatus(
+          `Installed ${Object.keys(allTranslations).join(', ')} (${totalCount.toLocaleString()} verses saved offline)`
+        );
+      } else if (verses.length > 0) {
         await saveBibleToIndexedDB(translationCode, verses);
         setCustomBibles((prev) => ({ ...prev, [translationCode]: verses }));
         setSelectedTranslation(translationCode);
         setBibleImportStatus(
           `Installed ${translationCode} (${verses.length.toLocaleString()} verses across 66 books)`
         );
+      } else {
+        setBibleImportStatus('No valid verses found in file. Check JSON/XML structure.');
       }
     } catch (err) {
       setBibleImportStatus(

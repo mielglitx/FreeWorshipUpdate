@@ -147,18 +147,26 @@ export function parseScriptureReference(query: string): ParsedScriptureRef | nul
   };
 }
 
+export interface BibleParseResult {
+  translationCode: string;
+  verses: BibleVerse[];
+  allTranslations?: Record<string, BibleVerse[]>;
+}
+
 /**
  * Universal Offline Bible Parser supporting:
- * 1. thiagobodruk JSON: [{ abbrev, name, chapters: [["v1", "v2"], ...] }]
- * 2. scrollmapper / flat JSON: [{ book_name | book, chapter, verse, text }] or { verses: [...] }
- * 3. Nested object dictionary: { "Genesis": { "1": { "1": "In the beginning..." } } }
- * 4. Zefania / OpenSong XML: <XMLBIBLE><BIBLEBOOK><CHAPTER><VERS>
+ * 1. FreeWorship Backup Bundles & Exports: { format: "freeworship-backup-v1", bibles: { "KJV": [...] } }
+ * 2. Direct Translation Maps: { "KJV": [...], "WEB": [...] }
+ * 3. thiagobodruk JSON: [{ abbrev, name, chapters: [["v1", "v2"], ...] }]
+ * 4. scrollmapper / flat JSON: [{ book_name | book, chapter, verse, text }] or { verses: [...] }
+ * 5. Nested object dictionary: { "Genesis": { "1": { "1": "In the beginning..." } } }
+ * 6. Zefania / OpenSong XML: <XMLBIBLE><BIBLEBOOK><CHAPTER><VERS>
  */
 export function parseBibleFile(
   content: string,
   fileName: string,
   customTranslationCode?: string
-): { translationCode: string; verses: BibleVerse[] } {
+): BibleParseResult {
   const defaultCode = (
     customTranslationCode ||
     fileName
@@ -171,6 +179,33 @@ export function parseBibleFile(
 
   const trimmed = content.trim().replace(/^\uFEFF/, ''); // Strip UTF-8 BOM if present
   const verses: BibleVerse[] = [];
+
+  // Helper to normalize any verse item safely
+  const normalizeVerseItem = (
+    item: any,
+    fallbackCode: string,
+    fallbackBookName?: string,
+    fallbackChap?: number,
+    fallbackVerse?: number
+  ): BibleVerse | null => {
+    if (!item) return null;
+    const text = typeof item === 'string' ? item : (item.text || item.scripture || item.verseText || '');
+    if (!text || typeof text !== 'string' || !text.trim()) return null;
+
+    const rawBook = fallbackBookName || item.book_name || item.book || item.bookNumber || item.book_id || 1;
+    const bookName = resolveBookName(rawBook);
+    const chapter = Number(fallbackChap !== undefined ? fallbackChap : (item.chapter || 1));
+    const verse = Number(fallbackVerse !== undefined ? fallbackVerse : (item.verse || 1));
+    const translation = String(customTranslationCode || item.translation || fallbackCode).toUpperCase();
+
+    return {
+      book: bookName,
+      chapter: isNaN(chapter) ? 1 : chapter,
+      verse: isNaN(verse) ? 1 : verse,
+      text: text.trim(),
+      translation,
+    };
+  };
 
   // XML Bible Detection (Zefania XML or OpenSong XML)
   if (trimmed.startsWith('<')) {
@@ -226,92 +261,185 @@ export function parseBibleFile(
       });
     });
 
-    return { translationCode: transCode, verses };
+    return {
+      translationCode: transCode,
+      verses,
+      allTranslations: { [transCode]: verses },
+    };
   }
 
   // JSON Bible Parsing
   const parsed = JSON.parse(trimmed);
 
-  // Case 1: Array at root
-  if (Array.isArray(parsed)) {
-    // Subcase 1A: thiagobodruk format -> [{ abbrev: "gn", name: "Genesis", chapters: [ ["v1", "v2"] ] }]
-    if (parsed.length > 0 && Array.isArray(parsed[0].chapters)) {
-      parsed.forEach((bookObj: any, bIdx: number) => {
-        const bookName = resolveBookName(bookObj.name || bookObj.book || bookObj.abbrev || bIdx + 1);
-        bookObj.chapters.forEach((chapArr: any, cIdx: number) => {
-          if (Array.isArray(chapArr)) {
-            chapArr.forEach((verseText: any, vIdx: number) => {
-              if (typeof verseText === 'string' && verseText.trim()) {
-                verses.push({
-                  book: bookName,
-                  chapter: cIdx + 1,
-                  verse: vIdx + 1,
-                  text: verseText.trim(),
-                  translation: defaultCode,
-                });
-              } else if (verseText && typeof verseText.text === 'string') {
-                verses.push({
-                  book: bookName,
-                  chapter: cIdx + 1,
-                  verse: Number(verseText.verse || vIdx + 1),
-                  text: verseText.text.trim(),
-                  translation: defaultCode,
-                });
-              }
-            });
-          }
+  // Case 1: FreeWorship Backup Bundle / JSON with `bibles` key
+  // E.g. { "format": "freeworship-backup-v1", "bibles": { "WEB": [...] } } OR { "bibles": { "KJV": [...] } }
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    const biblesObj = parsed.bibles;
+    if (biblesObj && typeof biblesObj === 'object' && !Array.isArray(biblesObj)) {
+      const allTranslations: Record<string, BibleVerse[]> = {};
+      let primaryCode = '';
+
+      for (const [rawCode, verseArray] of Object.entries(biblesObj)) {
+        if (!Array.isArray(verseArray)) continue;
+        const code = (customTranslationCode || rawCode || defaultCode).toUpperCase();
+        if (!primaryCode) primaryCode = code;
+
+        const list: BibleVerse[] = [];
+        verseArray.forEach((v: any) => {
+          const norm = normalizeVerseItem(v, code);
+          if (norm) list.push(norm);
         });
-      });
-      return { translationCode: defaultCode, verses };
+
+        if (list.length > 0) {
+          allTranslations[code] = list;
+        }
+      }
+
+      if (Object.keys(allTranslations).length > 0) {
+        const activeCode = customTranslationCode || primaryCode || Object.keys(allTranslations)[0];
+        const activeVerses = allTranslations[activeCode] || Object.values(allTranslations)[0] || [];
+        return {
+          translationCode: activeCode,
+          verses: activeVerses,
+          allTranslations,
+        };
+      }
     }
 
-    // Subcase 1B: Flat array of verse objects -> [{ book, chapter, verse, text }]
-    parsed.forEach((item: any) => {
-      if (item && (item.text || item.scripture)) {
-        const bookName = resolveBookName(item.book_name || item.book || item.bookNumber || 1);
-        verses.push({
-          book: bookName,
-          chapter: Number(item.chapter || 1),
-          verse: Number(item.verse || 1),
-          text: String(item.text || item.scripture).trim(),
-          translation: (customTranslationCode || item.translation || defaultCode).toUpperCase(),
+    // Case 2: Direct translation map { "KJV": [ { book, chapter, verse, text } ], "WEB": [...] }
+    const topKeys = Object.keys(parsed);
+    const nonMetaKeys = topKeys.filter(
+      (k) => !['format', 'version', 'exportedAt', 'scope', 'settings'].includes(k)
+    );
+    const isDirectTranslationMap =
+      nonMetaKeys.length > 0 &&
+      nonMetaKeys.every((k) => Array.isArray(parsed[k])) &&
+      nonMetaKeys.some((k) => {
+        const arr = parsed[k];
+        return arr.length > 0 && (arr[0]?.text || arr[0]?.book || arr[0]?.scripture);
+      });
+
+    if (isDirectTranslationMap) {
+      const allTranslations: Record<string, BibleVerse[]> = {};
+      let primaryCode = '';
+
+      for (const rawCode of nonMetaKeys) {
+        const verseArray = parsed[rawCode];
+        if (!Array.isArray(verseArray)) continue;
+        const code = (customTranslationCode || rawCode || defaultCode).toUpperCase();
+        if (!primaryCode) primaryCode = code;
+
+        const list: BibleVerse[] = [];
+        verseArray.forEach((v: any) => {
+          const norm = normalizeVerseItem(v, code);
+          if (norm) list.push(norm);
         });
+
+        if (list.length > 0) {
+          allTranslations[code] = list;
+        }
       }
-    });
-    return { translationCode: defaultCode, verses };
+
+      if (Object.keys(allTranslations).length > 0) {
+        const activeCode = customTranslationCode || primaryCode || Object.keys(allTranslations)[0];
+        const activeVerses = allTranslations[activeCode] || Object.values(allTranslations)[0] || [];
+        return {
+          translationCode: activeCode,
+          verses: activeVerses,
+          allTranslations,
+        };
+      }
+    }
   }
 
-  // Case 2: Object with `verses` array (e.g. scrollmapper / bible-api export)
+  // Case 3: Root Array
+  if (Array.isArray(parsed)) {
+    // Subcase 3A: thiagobodruk format -> [{ abbrev: "gn", name: "Genesis", chapters: [ ["v1", "v2"] ] }]
+    if (parsed.length > 0 && Array.isArray(parsed[0].chapters)) {
+      const list: BibleVerse[] = [];
+      parsed.forEach((bookObj: any, bIdx: number) => {
+        const bookName = resolveBookName(bookObj.name || bookObj.book || bookObj.abbrev || bIdx + 1);
+        if (Array.isArray(bookObj.chapters)) {
+          bookObj.chapters.forEach((chapArr: any, cIdx: number) => {
+            if (Array.isArray(chapArr)) {
+              chapArr.forEach((verseItem: any, vIdx: number) => {
+                const norm = normalizeVerseItem(
+                  verseItem,
+                  defaultCode,
+                  bookName,
+                  cIdx + 1,
+                  Number(verseItem?.verse || vIdx + 1)
+                );
+                if (norm) list.push(norm);
+              });
+            }
+          });
+        }
+      });
+      return {
+        translationCode: defaultCode,
+        verses: list,
+        allTranslations: { [defaultCode]: list },
+      };
+    }
+
+    // Subcase 3B: Flat array of verse objects -> [{ book, chapter, verse, text, translation }]
+    const allTranslations: Record<string, BibleVerse[]> = {};
+    let detectedCode = defaultCode;
+    const list: BibleVerse[] = [];
+
+    parsed.forEach((item: any) => {
+      const code = (customTranslationCode || item?.translation || defaultCode).toString().toUpperCase();
+      const norm = normalizeVerseItem(item, code);
+      if (norm) {
+        list.push(norm);
+        if (!allTranslations[norm.translation]) {
+          allTranslations[norm.translation] = [];
+        }
+        allTranslations[norm.translation].push(norm);
+        detectedCode = norm.translation;
+      }
+    });
+
+    const activeCode = customTranslationCode || detectedCode;
+    const activeVerses = allTranslations[activeCode] || list;
+    return {
+      translationCode: activeCode,
+      verses: activeVerses,
+      allTranslations: Object.keys(allTranslations).length > 0 ? allTranslations : { [activeCode]: list },
+    };
+  }
+
+  // Case 4: Object with `verses` array (e.g. scrollmapper / bible-api export)
   if (parsed && Array.isArray(parsed.verses)) {
     const code = (
       customTranslationCode ||
       parsed.translation_id ||
       parsed.translation ||
       parsed.abbreviation ||
+      parsed.version ||
       defaultCode
     )
       .toString()
       .toUpperCase();
+    const list: BibleVerse[] = [];
     parsed.verses.forEach((item: any) => {
-      const bookName = resolveBookName(item.book_name || item.book || item.book_id || 1);
-      if (item.text) {
-        verses.push({
-          book: bookName,
-          chapter: Number(item.chapter || 1),
-          verse: Number(item.verse || 1),
-          text: String(item.text).trim(),
-          translation: code,
-        });
-      }
+      const norm = normalizeVerseItem(item, code);
+      if (norm) list.push(norm);
     });
-    return { translationCode: code, verses };
+    return {
+      translationCode: code,
+      verses: list,
+      allTranslations: { [code]: list },
+    };
   }
 
-  // Case 3: Object with `books` array
+  // Case 5: Object with `books` array
   if (parsed && Array.isArray(parsed.books)) {
     const code = (customTranslationCode || parsed.translation || parsed.version || defaultCode)
       .toString()
       .toUpperCase();
+    const list: BibleVerse[] = [];
     parsed.books.forEach((bObj: any, bIdx: number) => {
       const bookName = resolveBookName(bObj.name || bObj.book || bIdx + 1);
       if (Array.isArray(bObj.chapters)) {
@@ -319,48 +447,63 @@ export function parseBibleFile(
           const chapNum = Number(cObj.chapter || cIdx + 1);
           const vArr = Array.isArray(cObj) ? cObj : cObj.verses || [];
           vArr.forEach((vObj: any, vIdx: number) => {
-            const text = typeof vObj === 'string' ? vObj : vObj.text;
-            if (text) {
-              verses.push({
-                book: bookName,
-                chapter: chapNum,
-                verse: Number(vObj?.verse || vIdx + 1),
-                text: String(text).trim(),
-                translation: code,
-              });
-            }
+            const norm = normalizeVerseItem(
+              vObj,
+              code,
+              bookName,
+              chapNum,
+              Number(vObj?.verse || vIdx + 1)
+            );
+            if (norm) list.push(norm);
           });
         });
       }
     });
-    return { translationCode: code, verses };
+    return {
+      translationCode: code,
+      verses: list,
+      allTranslations: { [code]: list },
+    };
   }
 
-  // Case 4: Keyed dictionary `{ "Genesis": { "1": { "1": "In the beginning..." } } }`
+  // Case 6: Keyed dictionary `{ "Genesis": { "1": { "1": "In the beginning..." } } }`
   if (parsed && typeof parsed === 'object') {
+    const list: BibleVerse[] = [];
     for (const [rawBook, chaptersObj] of Object.entries(parsed)) {
-      if (!chaptersObj || typeof chaptersObj !== 'object') continue;
+      if (!chaptersObj || typeof chaptersObj !== 'object' || Array.isArray(chaptersObj)) continue;
+      if (['format', 'version', 'exportedAt', 'scope', 'settings', 'bibles'].includes(rawBook)) continue;
+
       const bookName = resolveBookName(rawBook);
       for (const [chapKey, versesObj] of Object.entries(chaptersObj as Record<string, any>)) {
         const chapNum = parseInt(chapKey, 10);
         if (isNaN(chapNum) || !versesObj || typeof versesObj !== 'object') continue;
         for (const [verseKey, verseText] of Object.entries(versesObj as Record<string, any>)) {
           const vNum = parseInt(verseKey, 10);
-          if (!isNaN(vNum) && typeof verseText === 'string' && verseText.trim()) {
-            verses.push({
-              book: bookName,
-              chapter: chapNum,
-              verse: vNum,
-              text: verseText.trim(),
-              translation: defaultCode,
-            });
-          }
+          const norm = normalizeVerseItem(
+            verseText,
+            defaultCode,
+            bookName,
+            chapNum,
+            vNum
+          );
+          if (norm) list.push(norm);
         }
       }
     }
+    if (list.length > 0) {
+      return {
+        translationCode: defaultCode,
+        verses: list,
+        allTranslations: { [defaultCode]: list },
+      };
+    }
   }
 
-  return { translationCode: defaultCode, verses };
+  return {
+    translationCode: defaultCode,
+    verses: [],
+    allTranslations: {},
+  };
 }
 
 // ============================================================================
