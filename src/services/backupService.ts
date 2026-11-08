@@ -3,6 +3,7 @@ import {
   MediaAsset,
   MultiScreenRoutingSettings,
   ScheduleItem,
+  Slide,
   SongItem,
   ThemeTemplate,
 } from '../types/worship';
@@ -225,27 +226,101 @@ export function exportFullBackupJson(data: {
   );
 }
 
+export function normalizeSongItem(raw: any, fallbackTitle = 'Imported Song'): SongItem {
+  if (!raw || typeof raw !== 'object') {
+    return {
+      id: `song-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      title: fallbackTitle,
+      author: 'Unknown',
+      ccliNumber: '',
+      musicalKey: 'C',
+      slides: [{ id: `sl-${Date.now()}-0`, tag: 'Verse 1', lines: [fallbackTitle] }],
+    };
+  }
+
+  const id = String(raw.id || `song-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
+  const title = String(raw.title || fallbackTitle).trim();
+  const author = String(raw.author || raw.artist || 'Unknown').trim();
+  const musicalKey = String(raw.musicalKey || raw.key || 'C').trim();
+  const bpm = typeof raw.bpm === 'number' ? raw.bpm : (parseInt(raw.bpm, 10) || undefined);
+  const ccliNumber = String(raw.ccliNumber || raw.ccli || '').trim();
+
+  let slides: Slide[] = [];
+  if (Array.isArray(raw.slides) && raw.slides.length > 0) {
+    slides = raw.slides.map((sl: any, sIdx: number) => {
+      let lines: string[] = [];
+      if (Array.isArray(sl.lines)) {
+        lines = sl.lines.map((l: any) => String(l).trim()).filter(Boolean);
+      } else if (typeof sl.text === 'string') {
+        lines = sl.text.split(/\r?\n/).map((l: string) => l.trim()).filter(Boolean);
+      } else if (typeof sl.line === 'string') {
+        lines = [sl.line.trim()];
+      }
+      return {
+        id: String(sl.id || `sl-${Date.now()}-${sIdx}`),
+        tag: String(sl.tag || `Verse ${sIdx + 1}`),
+        lines: lines.length > 0 ? lines : [' '],
+        chords: sl.chords ? String(sl.chords).trim() : undefined,
+      };
+    });
+  } else if (typeof raw.lyrics === 'string' && raw.lyrics.trim()) {
+    const rawLines = raw.lyrics.split(/\r?\n/).map((l: string) => l.trim()).filter(Boolean);
+    for (let i = 0; i < rawLines.length; i += 4) {
+      slides.push({
+        id: `sl-${Date.now()}-${slides.length}`,
+        tag: `Verse ${slides.length + 1}`,
+        lines: rawLines.slice(i, i + 4),
+      });
+    }
+  }
+
+  if (slides.length === 0) {
+    slides = [
+      {
+        id: `sl-${Date.now()}-0`,
+        tag: 'Verse 1',
+        lines: [title],
+      },
+    ];
+  }
+
+  return {
+    id,
+    title,
+    author,
+    ccliNumber,
+    musicalKey,
+    bpm,
+    slides,
+    defaultBackgroundId: raw.defaultBackgroundId,
+  };
+}
+
 /**
  * Parses an uploaded JSON file and normalizes it into a FreeWorshipBackupBundle
- * (supports both wrapped `freeworship-backup-v1` bundles and raw arrays of songs/schedules/settings).
+ * (supports both wrapped `freeworship-backup-v1` bundles, single song objects,
+ * and raw arrays of songs/schedules/settings).
  */
 export function parseBackupOrModuleJson(rawText: string): FreeWorshipBackupBundle {
   const parsed = JSON.parse(rawText);
 
   if (parsed && parsed.format === 'freeworship-backup-v1') {
+    if (Array.isArray(parsed.songs)) {
+      parsed.songs = parsed.songs.map((s: any) => normalizeSongItem(s));
+    }
     return parsed as FreeWorshipBackupBundle;
   }
 
   // Raw array detection (e.g. raw SongItem[] or ScheduleItem[])
   if (Array.isArray(parsed)) {
     const first = parsed[0];
-    if (first && Array.isArray(first.slides) && 'musicalKey' in first) {
+    if (first && (Array.isArray(first.slides) || (first.title && (first.author || first.lyrics || first.slides)))) {
       return {
         format: 'freeworship-backup-v1',
         version: '1.0.0',
         exportedAt: new Date().toISOString(),
         scope: 'songs',
-        songs: parsed as SongItem[],
+        songs: parsed.map((s: any) => normalizeSongItem(s)),
       };
     }
     if (first && Array.isArray(first.slides) && 'type' in first) {
@@ -276,6 +351,24 @@ export function parseBackupOrModuleJson(rawText: string): FreeWorshipBackupBundl
         scope: 'bibles',
         bibles: { [code]: parsed as BibleVerse[] },
       };
+    }
+  }
+
+  // Single song object detection: { title: "...", slides: [...] } or { title: "...", lyrics: "..." }
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    if (
+      Array.isArray(parsed.slides) ||
+      (parsed.title && (parsed.lyrics || parsed.author || parsed.slides))
+    ) {
+      if (!parsed.format && !parsed.scope && !parsed.songs && !parsed.bibles && !parsed.schedule) {
+        return {
+          format: 'freeworship-backup-v1',
+          version: '1.0.0',
+          exportedAt: new Date().toISOString(),
+          scope: 'songs',
+          songs: [normalizeSongItem(parsed)],
+        };
+      }
     }
   }
 

@@ -2,7 +2,7 @@
   "name": "freeworship",
   "private": true,
   "type": "module",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Free, zero-latency cross-platform worship presentation software for Windows, macOS, and Linux",
   "author": "Amiel Yalung",
   "repository": {

@@ -32,6 +32,7 @@ import {
   exportSongToOpenLyricsXml,
   FreeWorshipBackupBundle,
   getDateStamp,
+  normalizeSongItem,
   parseBackupOrModuleJson,
 } from '../services/backupService';
 import { parseBibleFile } from '../services/bibleImporter';
@@ -124,15 +125,15 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
         const text = await file.text();
         const lower = file.name.toLowerCase();
 
-        if (lower.endsWith('.json')) {
+        if (lower.endsWith('.json') || text.trim().startsWith('{') || text.trim().startsWith('[')) {
           const bundle = parseBackupOrModuleJson(text);
           if (bundle.songs && bundle.songs.length > 0) {
-            importedSongs.push(...bundle.songs);
+            importedSongs.push(...bundle.songs.map((s) => normalizeSongItem(s, file.name)));
           }
         } else if (lower.endsWith('.xml') || text.trim().startsWith('<')) {
-          importedSongs.push(importOpenLyricsOrXmlSong(text, file.name));
+          importedSongs.push(normalizeSongItem(importOpenLyricsOrXmlSong(text, file.name), file.name));
         } else {
-          importedSongs.push(importChordProOrTextSong(text, file.name));
+          importedSongs.push(normalizeSongItem(importChordProOrTextSong(text, file.name), file.name));
         }
       }
 

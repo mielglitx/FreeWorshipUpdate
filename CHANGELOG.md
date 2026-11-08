@@ -4,6 +4,16 @@ All notable changes to the **FreeWorship Studio** (Windows Desktop Presentation 
 
 ---
 
+## [1.1.1] — November 8, 2026
+
+### 🚀 Highlights & Bug Fixes
+- **Universal Bible Importer**: Full round-trip support for exported FreeWorship Bible JSON files (`format: 'freeworship-backup-v1'`), multi-translation bundles, and direct `{ "KJV": [...] }` maps. Single and multi-translation files are safely installed to offline IndexedDB storage.
+- **Universal Song Importer**: Hardened song file parser to accept FreeWorship Song JSON exports, raw song arrays (with or without `musicalKey`), single-song JSON files, OpenLyrics XML, OpenSong XML, ChordPro, and plain text. Added user notification alerts when songs are imported.
+- **Direct GitHub Update Downloads**: Added permanent direct download buttons on the About dialog for `FreeWorship-StageController.apk` (Android) and Windows installers so operators can re-download or update at any time.
+- **Automatic Background Update Checking**: Checks for new releases upon opening the About dialog.
+
+---
+
 ## [1.1.0] — November 8, 2026
 
 ### 🚀 Highlights & Major Features

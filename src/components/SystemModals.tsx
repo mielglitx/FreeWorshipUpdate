@@ -200,6 +200,10 @@ export const WelcomeAboutModal: React.FC<WelcomeAboutModalProps> = ({
     targetPlatform: isAndroid ? 'android' : 'windows',
   });
 
+  useEffect(() => {
+    checkForUpdatesFromGitHub();
+  }, []);
+
   const checkForUpdatesFromGitHub = async () => {
     setCheckingUpdate(true);
     const targetPlat = isAndroid ? 'android' : 'windows';
@@ -518,24 +522,54 @@ export const WelcomeAboutModal: React.FC<WelcomeAboutModalProps> = ({
                   </div>
                 </div>
 
-                {updateStatus.message && (
-                  <div className="p-2.5 bg-booth-900 border border-booth-800 flex items-center justify-between gap-2">
+                {updateStatus.message ? (
+                  <div className="p-2.5 bg-booth-900 border border-booth-800 flex items-center justify-between gap-2 flex-wrap">
                     <span className="text-[11px] text-slate-200 font-mono">
                       {updateStatus.message}
                     </span>
-                    {updateStatus.downloadUrl && (
+                    {updateStatus.state === 'available' ? (
                       <a
-                        href={updateStatus.downloadUrl}
+                        href={
+                          updateStatus.downloadUrl ||
+                          (isAndroid ? GITHUB_RAW_APK_URL : `${GITHUB_UPDATE_REPO}/releases`)
+                        }
                         target="_blank"
                         rel="noreferrer"
-                        className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-black font-black text-[10px] uppercase flex items-center gap-1 shrink-0"
+                        className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs uppercase flex items-center gap-1.5 shadow-md shrink-0 animate-pulse"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>
+                          {isAndroid ? 'Download New APK' : 'Download Windows Update'}
+                        </span>
+                      </a>
+                    ) : (
+                      <a
+                        href={isAndroid ? GITHUB_RAW_APK_URL : `${GITHUB_UPDATE_REPO}/releases`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-2.5 py-1 bg-booth-850 hover:bg-booth-800 border border-booth-700 text-slate-300 font-bold text-[10px] flex items-center gap-1 shrink-0"
                       >
                         <Download className="w-3 h-3" />
                         <span>
-                          {isAndroid ? 'Download APK' : 'Download Windows .exe'}
+                          {isAndroid ? 'Download Latest APK' : 'Download Windows Setup'}
                         </span>
                       </a>
                     )}
+                  </div>
+                ) : (
+                  <div className="p-2.5 bg-booth-900 border border-booth-800 flex items-center justify-between gap-2">
+                    <span className="text-[11px] text-slate-400 font-mono">
+                      Current version: v.{APP_VERSION} ({isAndroid ? 'Android Remote' : 'Windows Studio'})
+                    </span>
+                    <a
+                      href={isAndroid ? GITHUB_RAW_APK_URL : `${GITHUB_UPDATE_REPO}/releases`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-2.5 py-1 bg-booth-850 hover:bg-booth-800 border border-booth-700 text-slate-300 font-bold text-[10px] flex items-center gap-1 shrink-0"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span>{isAndroid ? 'Download Latest APK' : 'Download Windows Setup'}</span>
+                    </a>
                   </div>
                 )}
               </div>

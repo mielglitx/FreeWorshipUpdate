@@ -103,6 +103,7 @@ import {
   exportSongsLibraryJson,
   exportSongToOpenLyricsXml,
   FreeWorshipBackupBundle,
+  normalizeSongItem,
   parseBackupOrModuleJson,
 } from './services/backupService';
 
@@ -824,21 +825,28 @@ const OperatorConsole: React.FC = () => {
 
     const importedSongs: SongItem[] = [];
     for (const file of Array.from(files)) {
-      const text = await file.text();
-      const lower = file.name.toLowerCase();
-      if (lower.endsWith('.json')) {
-        try {
-          const bundle = parseBackupOrModuleJson(text);
-          if (bundle.songs && bundle.songs.length > 0) {
-            importedSongs.push(...bundle.songs);
+      try {
+        const text = await file.text();
+        const lower = file.name.toLowerCase();
+        if (lower.endsWith('.json') || text.trim().startsWith('{') || text.trim().startsWith('[')) {
+          try {
+            const bundle = parseBackupOrModuleJson(text);
+            if (bundle.songs && bundle.songs.length > 0) {
+              importedSongs.push(...bundle.songs.map((s) => normalizeSongItem(s, file.name)));
+            }
+          } catch {
+            const song = importChordProOrTextSong(text, file.name);
+            importedSongs.push(normalizeSongItem(song, file.name));
           }
-        } catch {}
-      } else {
-        const isXml = lower.endsWith('.xml') || text.trim().startsWith('<');
-        const song = isXml
-          ? importOpenLyricsOrXmlSong(text, file.name)
-          : importChordProOrTextSong(text, file.name);
-        importedSongs.push(song);
+        } else {
+          const isXml = lower.endsWith('.xml') || text.trim().startsWith('<');
+          const song = isXml
+            ? importOpenLyricsOrXmlSong(text, file.name)
+            : importChordProOrTextSong(text, file.name);
+          importedSongs.push(normalizeSongItem(song, file.name));
+        }
+      } catch (err) {
+        console.error('Song file import error:', err);
       }
     }
 
@@ -852,6 +860,11 @@ const OperatorConsole: React.FC = () => {
         return [...uniqueNew, ...updatedPrev];
       });
       addSongToSchedule(importedSongs[0], true);
+      alert(`Successfully imported ${importedSongs.length} song(s) into your library!`);
+    } else {
+      alert(
+        'No valid songs found in selected file(s). Supported formats: FreeWorship Songs JSON (.fwx.json), OpenLyrics (.xml), OpenSong (.xml), ChordPro (.cho), or Plain Text (.txt).'
+      );
     }
     e.target.value = '';
   };

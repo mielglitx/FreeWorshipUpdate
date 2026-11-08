@@ -1,27 +1,39 @@
 {
-  "version": "1.1.0",
+  "version": "1.1.1",
   "releaseDate": "November 8, 2026",
   "author": "Amiel Yalung",
   "repository": "https://github.com/mielglitx/FreeWorshipUpdate",
   "windows": {
-    "version": "1.1.0",
+    "version": "1.1.1",
     "releaseDate": "November 8, 2026",
     "appName": "FreeWorship Studio (Windows)",
-    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.0/FreeWorship-Studio-Setup-1.1.0.exe",
-    "portableUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.0/FreeWorship-Studio-Portable-1.1.0.exe",
-    "fileName": "FreeWorship Studio-Setup-1.1.0.exe",
-    "notes": "Simplified 4-color themes (Light, Gray, Dark Gray, Dark), sharp 0px geometric corners, Bible tab refinement, delete confirmation modals with agreement checkbox, default sanctuary logo selector, multi-select, and full backup studio."
+    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases",
+    "portableUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases",
+    "fileName": "FreeWorship Studio-Setup.exe",
+    "notes": "v1.1.1 update: Universal Bible and Song JSON/XML round-trip import fixes, multi-translation offline IndexedDB support, automatic update notification, and direct installer downloads."
   },
   "android": {
-    "version": "1.1.0",
+    "version": "1.1.1",
     "releaseDate": "November 8, 2026",
     "appName": "FreeWorship Android Remote & 3rd Monitor",
-    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.0/FreeWorship-StageController.apk",
+    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/raw/main/FreeWorship-StageController.apk",
     "fallbackDownloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/raw/main/FreeWorship-StageController.apk",
     "fileName": "FreeWorship-StageController.apk",
-    "notes": "Remote song & Bible scripture scheduling directly into Windows service schedule, WebRTC local IP auto-discovery scanner across all Wi-Fi router subnets, in-app GitHub updater, and sharp geometric design."
+    "notes": "v1.1.1 update: In-app GitHub APK updater, direct one-click APK download, universal Bible/Song import support, and zero-latency Wi-Fi scanner."
   },
   "changelog": [
+    {
+      "version": "1.1.1",
+      "date": "November 8, 2026",
+      "platform": "Windows & Android",
+      "title": "Universal Bible & Song JSON Importer Fixes & One-Click GitHub Updates",
+      "highlights": [
+        "Universal Bible Importer: Full round-trip support for exported FreeWorship Bible JSON files ('freeworship-backup-v1'), multi-translation bundles, and direct translation maps.",
+        "Universal Song Importer: Robust parsing for FreeWorship Song JSON exports, raw song arrays (with or without musicalKey), single-song JSON files, and OpenLyrics XML.",
+        "One-Click Direct Update Downloads: Download button is always accessible for downloading FreeWorship-StageController.apk on Android and Windows installers on desktop.",
+        "Automatic Background Update Checking: Instantly checks for new updates whenever the About dialog is opened."
+      ]
+    },
     {
       "version": "1.1.0",
       "date": "November 8, 2026",
