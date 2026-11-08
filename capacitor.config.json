@@ -1,0 +1,9 @@
+{
+  "appId": "com.freeworship.stagecontroller",
+  "appName": "FreeWorship 3rd Monitor",
+  "webDir": "dist",
+  "server": {
+    "cleartext": true,
+    "androidScheme": "http"
+  }
+}

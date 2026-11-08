@@ -1,0 +1,63 @@
+{
+  "version": "1.1.0",
+  "releaseDate": "November 8, 2026",
+  "author": "Amiel Yalung",
+  "repository": "https://github.com/mielglitx/FreeWorshipUpdate",
+  "windows": {
+    "version": "1.1.0",
+    "releaseDate": "November 8, 2026",
+    "appName": "FreeWorship Studio (Windows)",
+    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.0/FreeWorship-Studio-Setup-1.1.0.exe",
+    "portableUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.0/FreeWorship-Studio-Portable-1.1.0.exe",
+    "fileName": "FreeWorship Studio-Setup-1.1.0.exe",
+    "notes": "Simplified 4-color themes (Light, Gray, Dark Gray, Dark), sharp 0px geometric corners, Bible tab refinement, delete confirmation modals with agreement checkbox, default sanctuary logo selector, multi-select, and full backup studio."
+  },
+  "android": {
+    "version": "1.1.0",
+    "releaseDate": "November 8, 2026",
+    "appName": "FreeWorship Android Remote & 3rd Monitor",
+    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.0/FreeWorship-StageController.apk",
+    "fallbackDownloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/raw/main/FreeWorship-StageController.apk",
+    "fileName": "FreeWorship-StageController.apk",
+    "notes": "Remote song & Bible scripture scheduling directly into Windows service schedule, WebRTC local IP auto-discovery scanner across all Wi-Fi router subnets, in-app GitHub updater, and sharp geometric design."
+  },
+  "changelog": [
+    {
+      "version": "1.1.0",
+      "date": "November 8, 2026",
+      "platform": "Windows & Android",
+      "title": "Platform-Aware Updates, Remote Scheduling, Sharp Design & Theme Studio",
+      "highlights": [
+        "Platform-Aware GitHub Updater: Windows (.exe) and Android (.apk) independently detect and download their respective updates.",
+        "In-App Changelog & Release Notes: Detailed version history accessible from the About page on both Windows and Android.",
+        "Android Remote Scheduling: Search songs and Bible passages on your Android phone/tablet and project or add them to the Windows schedule.",
+        "WebRTC Wi-Fi Scanner: Auto-discovers Windows PC across all home/church router subnets (PLDT, Globe, Converge, Huawei, hotspots).",
+        "4 Simplified UI Themes: Light, Gray, Dark Gray, and Dark color schemes for operator preference.",
+        "Sharp Modern Geometry: Enforced clean, sharp corners (0px border-radius) throughout all UI controls.",
+        "Refined Scripture Engine: Renamed 'Bible 66' to 'Bible', set KJV as default standard, and removed WEB.",
+        "Permanent Delete Safeguard: Checkbox confirmation modal prevents accidental deletion of songs, media, or audio tracks.",
+        "Default Sanctuary Logo: Choose any media item to display as the organization logo when [L] Logo panic mode is active.",
+        "Persistent 3rd Screen OFF: Stage Monitor disabled state is remembered across app restarts.",
+        "Multi-Select & Drag-to-Schedule: Ctrl/Shift item multi-selection, right-click context menus, and drag-and-drop to service schedule.",
+        "Complete Backup Studio: Import and export songs, schedules, display routing, and offline 66-book Bibles."
+      ]
+    },
+    {
+      "version": "1.0.0",
+      "date": "November 8, 2026",
+      "platform": "Windows & Android",
+      "title": "Initial Release of FreeWorship Studio",
+      "highlights": [
+        "Zero-latency multi-monitor broadcast presentation suite for churches.",
+        "2nd Screen Projector / LED Wall output with borderless fullscreen.",
+        "3rd Screen Stage Confidence Monitor with timer, chords, and live alerts.",
+        "Instant emergency panic controls: Blackout [B], Logo [L], Clear Text [C], Restore [Esc].",
+        "12-Key Cathedral Ambient Worship Pad synthesizer with 2.2s stereo crossfade.",
+        "Multi-track audio player with smooth 3-second booth fade out.",
+        "Typography, word-wrapping, and interactive 16:9 text boundary box designer.",
+        "Offline 66-book KJV Bible database with chapter and verse jump navigation.",
+        "Service Schedule run-of-show planner with instant section jump tags."
+      ]
+    }
+  ]
+}

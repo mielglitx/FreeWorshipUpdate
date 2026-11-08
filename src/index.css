@@ -1,0 +1,200 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* =========================================================================
+     4 SIMPLIFIED UI COLOR THEMES: Dark (default), Dark Gray, Gray, and Light
+     ========================================================================= */
+  :root,
+  [data-ui-theme="dark"] {
+    --booth-950: #0a0a0c;
+    --booth-900: #121216;
+    --booth-850: #1b1b21;
+    --booth-800: #383844;
+    --booth-700: #525263;
+    --booth-600: #717186;
+  }
+
+  [data-ui-theme="dark-gray"] {
+    --booth-950: #1f2126;
+    --booth-900: #292c33;
+    --booth-850: #343841;
+    --booth-800: #555b69;
+    --booth-700: #6e7687;
+    --booth-600: #8c95a8;
+  }
+
+  [data-ui-theme="gray"] {
+    --booth-950: #3b4048;
+    --booth-900: #494f59;
+    --booth-850: #565d69;
+    --booth-800: #77808f;
+    --booth-700: #919aa9;
+    --booth-600: #b0b8c5;
+  }
+
+  [data-ui-theme="light"] {
+    --booth-950: #e8ecf2;
+    --booth-900: #f7f9fc;
+    --booth-850: #dde3ec;
+    --booth-800: #9aa6b8;
+    --booth-700: #78869b;
+    --booth-600: #556378;
+  }
+
+  body {
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Enforce sharp 0px corners across all UI elements */
+  *,
+  *::before,
+  *::after {
+    border-radius: 0px !important;
+  }
+
+  /* Make borders across cards, inputs, selects, and settings panels crisp and clearly visible */
+  .border-booth-800 {
+    border-color: var(--booth-800) !important;
+  }
+  .border-booth-700 {
+    border-color: var(--booth-700) !important;
+  }
+  .border-booth-600 {
+    border-color: var(--booth-600) !important;
+  }
+}
+
+/* Light Theme High-Contrast Text & Surface Overrides (excluding black projector stage canvases) */
+[data-ui-theme="light"] .ui-console-shell {
+  color: #0f172a;
+}
+[data-ui-theme="light"] .ui-console-shell .text-white,
+[data-ui-theme="light"] .ui-console-shell .text-slate-100,
+[data-ui-theme="light"] .ui-console-shell .text-slate-200 {
+  color: #0f172a !important;
+}
+[data-ui-theme="light"] .ui-console-shell .text-slate-300,
+[data-ui-theme="light"] .ui-console-shell .text-slate-400,
+[data-ui-theme="light"] .ui-console-shell .text-slate-500 {
+  color: #334155 !important;
+}
+[data-ui-theme="light"] .ui-console-shell .text-amber-300,
+[data-ui-theme="light"] .ui-console-shell .text-amber-400 {
+  color: #b45309 !important;
+}
+[data-ui-theme="light"] .ui-console-shell .text-emerald-300,
+[data-ui-theme="light"] .ui-console-shell .text-emerald-400 {
+  color: #047857 !important;
+}
+[data-ui-theme="light"] .ui-console-shell .text-sky-300,
+[data-ui-theme="light"] .ui-console-shell .text-sky-400 {
+  color: #0369a1 !important;
+}
+[data-ui-theme="light"] .ui-console-shell .text-purple-300 {
+  color: #6d28d9 !important;
+}
+[data-ui-theme="light"] .ui-console-shell .text-red-300,
+[data-ui-theme="light"] .ui-console-shell .text-red-400 {
+  color: #b91c1c !important;
+}
+[data-ui-theme="light"] .ui-console-shell .bg-emerald-600 .text-white,
+[data-ui-theme="light"] .ui-console-shell .bg-emerald-600,
+[data-ui-theme="light"] .ui-console-shell .bg-red-600 {
+  color: #ffffff !important;
+}
+
+/* Preserve bright white text inside Media Pool thumbnails and Live/Next Projector Monitors even in Light Theme */
+[data-ui-theme="light"] .ui-console-shell .bg-black .text-white,
+[data-ui-theme="light"] .ui-console-shell .from-black\/95 .text-white,
+[data-ui-theme="light"] .ui-console-shell .from-black\/95 .text-slate-300 {
+  color: #f8fafc !important;
+}
+
+/* Custom sleek sharp scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--booth-950);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--booth-700);
+  border-radius: 0px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--booth-600);
+}
+
+/* =========================================================================
+   Hardware-Accelerated Slide Transition Animations (Enter & Exit Keyframes)
+   ========================================================================= */
+
+@keyframes fw-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes fw-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes fw-slide-up-in {
+  from { opacity: 0; transform: translate3d(0, 26%, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes fw-slide-up-out {
+  from { opacity: 1; transform: translate3d(0, 0, 0); }
+  to { opacity: 0; transform: translate3d(0, -26%, 0); }
+}
+
+@keyframes fw-slide-down-in {
+  from { opacity: 0; transform: translate3d(0, -26%, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes fw-slide-down-out {
+  from { opacity: 1; transform: translate3d(0, 0, 0); }
+  to { opacity: 0; transform: translate3d(0, 26%, 0); }
+}
+
+@keyframes fw-slide-left-in {
+  from { opacity: 0; transform: translate3d(32%, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes fw-slide-left-out {
+  from { opacity: 1; transform: translate3d(0, 0, 0); }
+  to { opacity: 0; transform: translate3d(-32%, 0, 0); }
+}
+
+@keyframes fw-zoom-in {
+  from { opacity: 0; transform: scale3d(0.84, 0.84, 1); }
+  to { opacity: 1; transform: scale3d(1, 1, 1); }
+}
+@keyframes fw-zoom-out {
+  from { opacity: 1; transform: scale3d(1, 1, 1); }
+  to { opacity: 0; transform: scale3d(1.12, 1.12, 1); }
+}
+
+@keyframes fw-blur-in {
+  from { opacity: 0; filter: blur(14px); transform: scale3d(0.96, 0.96, 1); }
+  to { opacity: 1; filter: blur(0px); transform: scale3d(1, 1, 1); }
+}
+@keyframes fw-blur-out {
+  from { opacity: 1; filter: blur(0px); transform: scale3d(1, 1, 1); }
+  to { opacity: 0; filter: blur(14px); transform: scale3d(1.04, 1.04, 1); }
+}
+
+@keyframes fw-flip-in {
+  from { opacity: 0; transform: perspective(900px) rotateX(-65deg); }
+  to { opacity: 1; transform: perspective(900px) rotateX(0deg); }
+}
+@keyframes fw-flip-out {
+  from { opacity: 1; transform: perspective(900px) rotateX(0deg); }
+  to { opacity: 0; transform: perspective(900px) rotateX(65deg); }
+}

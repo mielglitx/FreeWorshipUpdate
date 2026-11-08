@@ -1,0 +1,86 @@
+{
+  "name": "freeworship",
+  "private": true,
+  "type": "module",
+  "version": "1.1.0",
+  "description": "Free, zero-latency cross-platform worship presentation software for Windows, macOS, and Linux",
+  "author": "Amiel Yalung",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mielglitx/FreeWorshipUpdate.git"
+  },
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite --host --port 5173",
+    "electron:dev": "concurrently -k \"vite --host --port 5173\" \"wait-on http://localhost:5173 && electron .\"",
+    "windows:start": "npm run build && electron .",
+    "windows:installer": "npm run build && electron-builder --win",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host"
+  },
+  "build": {
+    "appId": "com.freeworship.studio",
+    "productName": "FreeWorship Studio",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "mielglitx",
+        "repo": "FreeWorshipUpdate"
+      }
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "FreeWorship Studio"
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}.${ext}"
+    }
+  },
+  "dependencies": {
+    "jszip": "^3.10.2",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/cli": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.0",
+    "electron": "^33.2.1",
+    "electron-builder": "^26.18.0",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "~5.6.2",
+    "vite": "^6.0.5",
+    "wait-on": "^8.0.1"
+  }
+}
