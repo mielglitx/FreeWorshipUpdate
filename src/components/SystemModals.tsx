@@ -17,15 +17,15 @@ import {
   AlertCircle,
 } from 'lucide-react';
 
-export const APP_VERSION = '1.1.1';
-export const APP_RELEASE_DATE = 'November 8, 2026';
+export const APP_VERSION = '1.1.2';
+export const APP_RELEASE_DATE = 'November 9, 2026';
 export const GITHUB_UPDATE_REPO = 'https://github.com/mielglitx/FreeWorshipUpdate';
 export const GITHUB_RELEASES_API =
   'https://api.github.com/repos/mielglitx/FreeWorshipUpdate/releases/latest';
 export const GITHUB_RAW_UPDATES_URL =
   'https://raw.githubusercontent.com/mielglitx/FreeWorshipUpdate/main/updates.json';
 export const GITHUB_RAW_APK_URL =
-  'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.1/FreeWorship-StageController.apk';
+  'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.2/FreeWorship-StageController.apk';
 
 export interface ChangelogItem {
   version: string;
@@ -36,6 +36,19 @@ export interface ChangelogItem {
 }
 
 export const APP_CHANGELOG: ChangelogItem[] = [
+  {
+    version: '1.1.2',
+    date: 'November 9, 2026',
+    platform: 'Windows & Android',
+    title: 'Built-in 5 Bible Translations, 9 Classic Hymns & Universal Importer Fix',
+    highlights: [
+      'Built-in Scripture Translations: Integrated NIV, NASB, Magandang Balita Bibliya 1901 (MBB 1901), and ESV alongside KJV with 1-click full 66-book offline IndexedDB installation.',
+      '9 Classic Hymns Added: Seeded complete lyrics, verses, choruses, and chords for To God Be The Glory, Wonderful Grace of Jesus, The Battle Hymn of Republic, Love Lifted Me, Stand up, Stand up for Jesus, Holy, Holy, Holy, The Banner of The Cross, The Fight is On, and Victory in Jesus.',
+      'Universal Bible Importer Fix: Resolved round-trip import of exported FreeWorship Bible files (*.fwx.json), backup archives, and multi-translation bundles without structure errors.',
+      'Removed WEB Selection: Standardized on KJV, NIV, NASB, ESV, and MBB 1901 as sanctuary standard translations.',
+      'Remote Scripture Translation Selector: Android Stage Controller can now select specific translations when pushing scripture passages to the live screen.',
+    ],
+  },
   {
     version: '1.1.1',
     date: 'November 8, 2026',

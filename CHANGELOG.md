@@ -4,6 +4,27 @@ All notable changes to the **FreeWorship Studio** (Windows Desktop Presentation 
 
 ---
 
+## [1.1.2] — November 9, 2026
+
+### 🚀 Highlights & Major Features
+- **Built-in 5 Bible Translations**: Added full built-in support for **KJV** (King James Version), **NIV** (New International Version), **NASB** (New American Standard Bible), **MBB 1901** (Magandang Balita Bibliya 1901 / Ang Biblia 1901 Tagalog), and **ESV** (English Standard Version). Every translation has pre-seeded core sanctuary verses and a 1-click installer to download and permanently store all 31,102 verses offline into IndexedDB.
+- **9 Classic Built-in Hymns Added**: Added the requested classic hymns with complete stanzas, choruses, and chord notations:
+  1. *To God Be The Glory*
+  2. *Wonderful Grace of Jesus*
+  3. *The Battle Hymn of Republic*
+  4. *Love Lifted Me*
+  5. *Stand up, Stand up for Jesus*
+  6. *Holy, Holy, Holy*
+  7. *The Banner of The Cross*
+  8. *The Fight is On*
+  9. *Victory in Jesus*
+  Existing local storage databases automatically merge missing default hymns on launch without overwriting customized libraries.
+- **Universal Bible Importer Round-Trip Fix**: Fixed issue where re-importing FreeWorship-exported Bible files (`.fwx.json`) threw "No valid verses found in file". The importer now flawlessly extracts `format: "freeworship-backup-v1"` bundles, `bibles` dictionaries, multi-translation archives, nested book/chapter maps, and flat verse arrays.
+- **Removed WEB Scripture Selection**: Removed `WEB` from translation selectors and standardized church sanctuary operations on KJV, NIV, NASB, ESV, and MBB 1901.
+- **Android Remote Translation Switcher**: Operators on the Android Stage Controller can now choose which translation (`KJV`, `NIV`, `NASB`, `ESV`, or `MBB 1901`) to push when scheduling or projecting scripture live.
+
+---
+
 ## [1.1.1] — November 8, 2026
 
 ### 🚀 Highlights & Major Features

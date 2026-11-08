@@ -120,6 +120,7 @@ export const AndroidStageControllerView: React.FC = () => {
 
   // Android Remote Add Song / Bible Verse State
   const [songSearchQuery, setSongSearchQuery] = useState<string>('');
+  const [remoteBibleTranslation, setRemoteBibleTranslation] = useState<string>('KJV');
   const [remoteBibleBook, setRemoteBibleBook] = useState<string>('John');
   const [remoteBibleChapter, setRemoteBibleChapter] = useState<number>(3);
   const [remoteBibleVerseRange, setRemoteBibleVerseRange] = useState<string>('16');
@@ -1038,7 +1039,17 @@ export const AndroidStageControllerView: React.FC = () => {
                         <span className="text-xs font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
                           <BookOpen className="w-4 h-4" /> Add Bible Verse / Passage to Schedule
                         </span>
-                        <span className="text-[10px] font-mono text-slate-400">KJV 66 Books</span>
+                        <select
+                          value={remoteBibleTranslation}
+                          onChange={(e) => setRemoteBibleTranslation(e.target.value)}
+                          className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-0.5 text-[10px] font-bold text-amber-300"
+                        >
+                          <option value="KJV">KJV</option>
+                          <option value="NIV">NIV</option>
+                          <option value="NASB">NASB</option>
+                          <option value="ESV">ESV</option>
+                          <option value="MBB 1901">MBB 1901</option>
+                        </select>
                       </div>
 
                       {/* Option A: Quick Book / Chapter / Verse Picker */}
@@ -1095,10 +1106,10 @@ export const AndroidStageControllerView: React.FC = () => {
                             dispatchRemoteAction({
                               action: 'ADD_SCRIPTURE_TO_SCHEDULE',
                               reference: refStr,
-                              translation: 'KJV',
+                              translation: remoteBibleTranslation,
                               goLive: false,
                             });
-                            triggerRemoteNotice(`Added ${refStr} to Schedule`);
+                            triggerRemoteNotice(`Added ${refStr} (${remoteBibleTranslation}) to Schedule`);
                           }}
                           className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border-2 border-slate-600 text-amber-300 font-bold text-xs flex items-center justify-center gap-1"
                         >
@@ -1112,10 +1123,10 @@ export const AndroidStageControllerView: React.FC = () => {
                             dispatchRemoteAction({
                               action: 'ADD_SCRIPTURE_TO_SCHEDULE',
                               reference: refStr,
-                              translation: 'KJV',
+                              translation: remoteBibleTranslation,
                               goLive: true,
                             });
-                            triggerRemoteNotice(`Projected ${refStr} Live!`);
+                            triggerRemoteNotice(`Projected ${refStr} (${remoteBibleTranslation}) Live!`);
                             setControllerTab('slides');
                           }}
                           className="py-2.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1 shadow"
@@ -1143,11 +1154,11 @@ export const AndroidStageControllerView: React.FC = () => {
                               dispatchRemoteAction({
                                 action: 'ADD_SCRIPTURE_TO_SCHEDULE',
                                 reference: remoteBibleQuickRef.trim(),
-                                translation: 'KJV',
+                                translation: remoteBibleTranslation,
                                 goLive: false,
                               });
                               triggerRemoteNotice(
-                                `Added ${remoteBibleQuickRef.trim()} to Schedule`
+                                `Added ${remoteBibleQuickRef.trim()} (${remoteBibleTranslation}) to Schedule`
                               );
                               setRemoteBibleQuickRef('');
                             }}
@@ -1161,11 +1172,11 @@ export const AndroidStageControllerView: React.FC = () => {
                               dispatchRemoteAction({
                                 action: 'ADD_SCRIPTURE_TO_SCHEDULE',
                                 reference: remoteBibleQuickRef.trim(),
-                                translation: 'KJV',
+                                translation: remoteBibleTranslation,
                                 goLive: true,
                               });
                               triggerRemoteNotice(
-                                `Projected ${remoteBibleQuickRef.trim()} Live!`
+                                `Projected ${remoteBibleQuickRef.trim()} (${remoteBibleTranslation}) Live!`
                               );
                               setRemoteBibleQuickRef('');
                               setControllerTab('slides');

@@ -73,6 +73,8 @@ import { SongEditorModal } from './components/SongEditorModal';
 import { MotionBackgroundCanvas } from './components/MotionBackgroundCanvas';
 import {
   BIBLE_BOOKS_66,
+  BIBLE_EDITIONS,
+  BuiltInBibleEdition,
   fetchAndInstallPublicDomainBible,
   loadAllBiblesFromIndexedDB,
   parseBibleFile,
@@ -179,9 +181,19 @@ function getTagBadgeStyle(tag: string): string {
 
 const OperatorConsole: React.FC = () => {
   // Core Databases
-  const [songs, setSongs] = useState<SongItem[]>(() =>
-    loadPersisted(STORAGE_KEYS.SONGS, DEFAULT_SONGS)
-  );
+  const [songs, setSongs] = useState<SongItem[]>(() => {
+    const loaded = loadPersisted<SongItem[]>(STORAGE_KEYS.SONGS, DEFAULT_SONGS);
+    const existingTitles = new Set(
+      loaded.map((s) => s.title.trim().toLowerCase().replace(/[^a-z0-9]/g, ''))
+    );
+    const missingDefaults = DEFAULT_SONGS.filter(
+      (ds) => !existingTitles.has(ds.title.trim().toLowerCase().replace(/[^a-z0-9]/g, ''))
+    );
+    if (missingDefaults.length > 0) {
+      return [...loaded, ...missingDefaults];
+    }
+    return loaded;
+  });
   const [schedule, setSchedule] = useState<ScheduleItem[]>(() =>
     loadPersisted(STORAGE_KEYS.SCHEDULE, DEFAULT_SERVICE_SCHEDULE)
   );
@@ -696,7 +708,12 @@ const OperatorConsole: React.FC = () => {
         case 'ADD_SCRIPTURE_TO_SCHEDULE': {
           const parsed = parseScriptureReference(cmd.reference);
           if (parsed) {
-            const matchedVerses = activeTranslationVerses.filter((v) => {
+            const requestedTrans = cmd.translation || selectedTranslation;
+            const transPool =
+              customBibles[requestedTrans] ||
+              BIBLE_DATABASE.filter((v) => v.translation === requestedTrans);
+            const poolToSearch = transPool.length > 0 ? transPool : activeTranslationVerses;
+            const matchedVerses = poolToSearch.filter((v) => {
               if (v.book.toLowerCase() !== parsed.book.toLowerCase()) return false;
               if (v.chapter !== parsed.chapter) return false;
               if (parsed.verseStart !== undefined) {
@@ -997,21 +1014,35 @@ const OperatorConsole: React.FC = () => {
   // =========================================================================
   // 66-BOOK OFFLINE SCRIPTURE ENGINE & JSON/XML BIBLE IMPORTER
   // =========================================================================
+  // Built-in Standard Bibles: KJV, NIV, NASB, Magandang Balita Bibliya 1901 (MBB 1901), ESV
+  const BUILTIN_TRANSLATIONS = useMemo(() => ['KJV', 'NIV', 'NASB', 'ESV', 'MBB 1901'], []);
+
   const allAvailableBiblesMap: Record<string, BibleVerse[]> = useMemo(() => {
-    const map: Record<string, BibleVerse[]> = {
-      KJV: BIBLE_DATABASE.filter((v) => v.translation === 'KJV'),
-      ...customBibles,
-    };
+    const map: Record<string, BibleVerse[]> = {};
+    BUILTIN_TRANSLATIONS.forEach((code) => {
+      map[code] = BIBLE_DATABASE.filter((v) => v.translation === code);
+    });
+    Object.entries(customBibles).forEach(([code, verses]) => {
+      if (code !== 'WEB') {
+        map[code] = verses;
+      }
+    });
     return map;
-  }, [customBibles]);
+  }, [customBibles, BUILTIN_TRANSLATIONS]);
 
   const availableTranslations = useMemo(() => {
-    const codes = new Set<string>(['KJV']);
+    const codes = new Set<string>(BUILTIN_TRANSLATIONS);
     Object.keys(customBibles).forEach((c) => {
-      codes.add(c);
+      if (c !== 'WEB') codes.add(c);
     });
     return Array.from(codes);
-  }, [customBibles]);
+  }, [customBibles, BUILTIN_TRANSLATIONS]);
+
+  useEffect(() => {
+    if (selectedTranslation === 'WEB') {
+      setSelectedTranslation('KJV');
+    }
+  }, [selectedTranslation]);
 
   const activeTranslationVerses: BibleVerse[] = useMemo(() => {
     const customList = customBibles[selectedTranslation];
@@ -1110,9 +1141,12 @@ const OperatorConsole: React.FC = () => {
   };
 
   // 1-Click Download & Offline Install of Full 31,102-Verse 66-Book Bible
-  const handleInstallFullPublicBible = async (edition: 'en_kjv' | 'en_bbe') => {
+  const handleInstallFullPublicBible = async (
+    edition: BuiltInBibleEdition | 'en_kjv' | 'en_niv' | 'en_nasb' | 'en_esv' | 'tl_abtag'
+  ) => {
+    const meta = BIBLE_EDITIONS[edition as BuiltInBibleEdition] || BIBLE_EDITIONS.en_kjv;
     setIsDownloadingBible(true);
-    setBibleImportStatus(`Downloading full 66-book ${edition === 'en_kjv' ? 'KJV' : 'BBE'} (31,102 verses)...`);
+    setBibleImportStatus(`Downloading complete 66-book ${meta.label} (${meta.code})...`);
     try {
       const { translationCode, verses } = await fetchAndInstallPublicDomainBible(edition);
       setCustomBibles((prev) => ({ ...prev, [translationCode]: verses }));
@@ -1120,9 +1154,9 @@ const OperatorConsole: React.FC = () => {
       setBibleImportStatus(
         `Offline ${translationCode} Ready (${verses.length.toLocaleString()} verses saved to IndexedDB)`
       );
-    } catch {
+    } catch (err) {
       setBibleImportStatus(
-        'Offline mode: Could not reach GitHub CDN. Use "Import JSON/XML" to load a local Bible file.'
+        `Offline notice: Could not download ${meta.code} from CDN (${err instanceof Error ? err.message : 'network error'}). You can also click "Import Bible" with your own JSON/XML file.`
       );
     } finally {
       setIsDownloadingBible(false);
@@ -1978,17 +2012,34 @@ const OperatorConsole: React.FC = () => {
                     <span className="truncate">Export {selectedTranslation}</span>
                   </button>
 
-                  <button
-                    onClick={() => handleInstallFullPublicBible('en_kjv')}
-                    disabled={isDownloadingBible}
-                    className="py-1.5 px-2 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-[10px] font-bold text-emerald-300 flex items-center justify-center gap-1 disabled:opacity-50"
-                    title="Download & cache all 31,102 KJV verses across all 66 books into offline IndexedDB"
-                  >
-                    <Download className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">
-                      {isDownloadingBible ? 'Installing...' : 'Full 66 KJV'}
-                    </span>
-                  </button>
+                  {(() => {
+                    const editionMap: Record<string, BuiltInBibleEdition> = {
+                      KJV: 'en_kjv',
+                      NIV: 'en_niv',
+                      NASB: 'en_nasb',
+                      ESV: 'en_esv',
+                      'MBB 1901': 'tl_abtag',
+                    };
+                    const targetEdition = editionMap[selectedTranslation] || 'en_kjv';
+                    const isInstalled = (customBibles[selectedTranslation]?.length || 0) > 2000;
+                    return (
+                      <button
+                        onClick={() => handleInstallFullPublicBible(targetEdition)}
+                        disabled={isDownloadingBible}
+                        className="py-1.5 px-2 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-[10px] font-bold text-emerald-300 flex items-center justify-center gap-1 disabled:opacity-50"
+                        title={`Download & cache complete 66 books of ${selectedTranslation} into offline IndexedDB`}
+                      >
+                        <Download className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">
+                          {isDownloadingBible
+                            ? 'Installing...'
+                            : isInstalled
+                            ? `Full 66 ${selectedTranslation} ✓`
+                            : `Full 66 ${selectedTranslation}`}
+                        </span>
+                      </button>
+                    );
+                  })()}
                 </div>
 
                 {bibleImportStatus && (
