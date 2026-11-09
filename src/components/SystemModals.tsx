@@ -17,7 +17,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 
-export const APP_VERSION = '1.1.2';
+export const APP_VERSION = '1.1.3';
 export const APP_RELEASE_DATE = 'November 9, 2026';
 export const GITHUB_UPDATE_REPO = 'https://github.com/mielglitx/FreeWorshipUpdate';
 export const GITHUB_RELEASES_API =

@@ -4,6 +4,49 @@ All notable changes to the **FreeWorship Studio** (Windows Desktop Presentation 
 
 ---
 
+## [1.1.3] — November 9, 2026
+
+### 🚀 Highlights & Major Features
+- **Dedicated Song Preview Workspace**:
+  - Center Panel now features a dual workspace switcher: **[🔴 Live Service]** and **[👁️ Song Preview]**.
+  - Clicking any song in the library instantly selects it into the preview workspace, allowing operators to inspect all stanzas, choruses, and chord notations without interrupting the live sanctuary projection.
+  - Includes dedicated preview section jump buttons (e.g. *Verse 1*, *Chorus*, *Verse 2*) to instantly jump to any part of the song in preview.
+  - 1-click **"Go Live Now"** and **"Take Live to Projector"** buttons immediately project the selected previewed verse onto all live outputs.
+- **Slide Deck Grid & List View Toggle**:
+  - Added an instant **View: [Grid | List]** toggle persistent across sessions.
+  - **List View** renders slides as full-width vertical stacked cards, displaying verse tags, live/next/preview badges, lyrics lines, and chords side-by-side for rapid verse scanning during live worship.
+- **Triple-Layer User Song Data Retention Across Updates**:
+  - Created persistent multi-tier backup system writing all user-created and customized songs across **LocalStorage**, **IndexedDB**, and persistent Electron disk storage (`%APPDATA%\freeworship\user_library_songs.json`).
+  - Implemented non-destructive merging (`mergeSongsWithDefaults`), guaranteeing 100% data retention of all user songs across any future app update or installer run.
+- **Alphabetical Song Library Sorting**:
+  - Songs library list is now automatically sorted from A to Z by title (`localeCompare`).
+- **20 Classic Hymns Added**:
+  - Integrated complete stanzas, choruses, and chord progressions for:
+    1. *Love Lifted Me*
+    2. *In The Garden*
+    3. *He Lives*
+    4. *At the cross*
+    5. *At Calvary*
+    6. *Because He Lives*
+    7. *Beulah Land*
+    8. *I stand amaze*
+    9. *Now I belong to Jesus*
+    10. *Standing on the promises*
+    11. *Showers of Blessings*
+    12. *Bringing in the sheaves*
+    13. *Blessed assurance*
+    14. *Draw me nearer*
+    15. *Great is thy faithfulness*
+    16. *There is power in the blood*
+    17. *Leaning on the everlasting arms*
+    18. *I'll fly away*
+    19. *Mansion over the hilltop*
+    20. *when we all get to heaven*
+- **Dynamic Dual Confidence Monitor**:
+  - Bottom right monitor seamlessly toggles between **CUED NEXT** (in Live Service mode) and **SONG PREVIEW** (in Song Preview mode) with full interactive preview stage rendering and 1-click Take Live overlay.
+
+---
+
 ## [1.1.2] — November 9, 2026
 
 ### 🚀 Highlights & Major Features

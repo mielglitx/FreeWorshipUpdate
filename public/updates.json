@@ -1,0 +1,104 @@
+{
+  "version": "1.1.3",
+  "releaseDate": "November 9, 2026",
+  "author": "Amiel Yalung",
+  "repository": "https://github.com/mielglitx/FreeWorshipUpdate",
+  "windows": {
+    "version": "1.1.3",
+    "releaseDate": "November 9, 2026",
+    "appName": "FreeWorship Studio (Windows)",
+    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.3/FreeWorship.Studio-Setup-1.1.3.exe",
+    "portableUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases",
+    "fileName": "FreeWorship Studio-Setup-1.1.3.exe",
+    "notes": "v1.1.3 update: Dedicated Song Preview section, Grid vs List View toggle for fast verse scanning, alphabetical song sorting, triple-layer data retention for user songs, and 20 classic hymns added."
+  },
+  "android": {
+    "version": "1.1.3",
+    "releaseDate": "November 9, 2026",
+    "appName": "FreeWorship Android Remote & 3rd Monitor",
+    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.3/FreeWorship-StageController.apk",
+    "fallbackDownloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/raw/main/FreeWorship-StageController.apk",
+    "fileName": "FreeWorship-StageController.apk",
+    "notes": "v1.1.3 update: List view support, song previewing, built-in 20 classic hymns, and guaranteed user song library retention."
+  },
+  "changelog": [
+    {
+      "version": "1.1.3",
+      "date": "November 9, 2026",
+      "platform": "Windows & Android",
+      "title": "Dedicated Song Preview Workspace, Grid & List View Toggle, Alphabetical Song Sorting, Triple-Layer User Song Retention & 20 Classic Hymns",
+      "highlights": [
+        "Dedicated Song Preview Workspace: Added a Center Panel tab switcher ('Live Service' vs 'Song Preview') allowing operators to preview any selected song, inspect verses, jump through sections, and review chords without altering live sanctuary output.",
+        "Grid vs List View Switcher: Added 'View: Grid | List' mode toggle for both Live Service and Song Preview slide decks. List View presents full-width stacked rows with verse tags, status badges, lyrics lines, chords, and direct 1-click 'Go Live' buttons for rapid verse selection during worship.",
+        "Triple-Layer User Song Retention: Built seamless persistence saving user-created and edited songs across LocalStorage, IndexedDB, and persistent Electron disk storage (%APPDATA%\\freeworship\\user_library_songs.json), ensuring 100% data retention across all app updates.",
+        "Alphabetical Song Library Sorting: The songs library catalog is now automatically sorted from A to Z by title.",
+        "20 Classic Hymns Added: Seeded complete lyrics, verses, choruses, and chord progressions for Love Lifted Me, In The Garden, He Lives, At the Cross, At Calvary, Because He Lives, Beulah Land, I Stand Amazed, Now I Belong to Jesus, Standing on the Promises, Showers of Blessings, Bringing in the Sheaves, Blessed Assurance, Draw Me Nearer, Great Is Thy Faithfulness, There Is Power in the Blood, Leaning on the Everlasting Arms, I'll Fly Away, Mansion Over the Hilltop, and When We All Get to Heaven.",
+        "Dual Monitor Integration: The bottom right confidence monitor dynamically switches between 'CUED NEXT' (in Live mode) and 'SONG PREVIEW' (in Preview mode) with 1-click 'Take Live to Projector' action."
+      ]
+    },
+    {
+      "version": "1.1.2",
+      "date": "November 9, 2026",
+      "platform": "Windows & Android",
+      "title": "Built-in 5 Bible Translations, 9 Classic Hymns, Schedule Clear & Importer Fix",
+      "highlights": [
+        "Full Schedule Item Deletion & Clear All: Allowed deleting any schedule item including the final item, added 1-click 'Clear All' with agreement checkbox confirmation, added right-click context menu, and added remote schedule clearing from Android.",
+        "Built-in Scripture Translations: Integrated NIV, NASB, Magandang Balita Bibliya 1901 (MBB 1901), and ESV alongside KJV with 1-click full 66-book offline IndexedDB installation.",
+        "9 Classic Hymns Added: Seeded complete lyrics, verses, choruses, and chords for To God Be The Glory, Wonderful Grace of Jesus, The Battle Hymn of Republic, Love Lifted Me, Stand up, Stand up for Jesus, Holy, Holy, Holy, The Banner of The Cross, The Fight is On, and Victory in Jesus.",
+        "Universal Bible Importer Fix: Seamless round-trip import of exported FreeWorship Bible files (*.fwx.json), backup archives, and multi-translation bundles without structure errors.",
+        "Removed WEB Selection: Standardized on KJV, NIV, NASB, ESV, and MBB 1901 as sanctuary standard translations.",
+        "Remote Scripture Translation Selector: Android Stage Controller can now select specific translations when pushing scripture passages to the live screen."
+      ]
+    },
+    {
+      "version": "1.1.1",
+      "date": "November 8, 2026",
+      "platform": "Windows & Android",
+      "title": "Universal Bible & Song JSON Importer Fixes & One-Click GitHub Updates",
+      "highlights": [
+        "Universal Bible Importer: Full round-trip support for exported FreeWorship Bible JSON files ('freeworship-backup-v1'), multi-translation bundles, and direct translation maps.",
+        "Universal Song Importer: Robust parsing for FreeWorship Song JSON exports, raw song arrays (with or without musicalKey), single-song JSON files, and OpenLyrics XML.",
+        "One-Click Direct Update Downloads: Download button is always accessible for downloading FreeWorship-StageController.apk on Android and Windows installers on desktop.",
+        "Automatic Background Update Checking: Instantly checks for new updates whenever the About dialog is opened."
+      ]
+    },
+    {
+      "version": "1.1.0",
+      "date": "November 8, 2026",
+      "platform": "Windows & Android",
+      "title": "Platform-Aware Updates, Remote Scheduling, Sharp Design & Theme Studio",
+      "highlights": [
+        "Platform-Aware GitHub Updater: Windows (.exe) and Android (.apk) independently detect and download their respective updates.",
+        "In-App Changelog & Release Notes: Detailed version history accessible from the About page on both Windows and Android.",
+        "Android Remote Scheduling: Search songs and Bible passages on your Android phone/tablet and project or add them to the Windows schedule.",
+        "WebRTC Wi-Fi Scanner: Auto-discovers Windows PC across all home/church router subnets (PLDT, Globe, Converge, Huawei, hotspots).",
+        "4 Simplified UI Themes: Light, Gray, Dark Gray, and Dark color schemes for operator preference.",
+        "Sharp Modern Geometry: Enforced clean, sharp corners (0px border-radius) throughout all UI controls.",
+        "Refined Scripture Engine: Renamed 'Bible 66' to 'Bible', set KJV as default standard, and removed WEB.",
+        "Permanent Delete Safeguard: Checkbox confirmation modal prevents accidental deletion of songs, media, or audio tracks.",
+        "Default Sanctuary Logo: Choose any media item to display as the organization logo when [L] Logo panic mode is active.",
+        "Persistent 3rd Screen OFF: Stage Monitor disabled state is remembered across app restarts.",
+        "Multi-Select & Drag-to-Schedule: Ctrl/Shift item multi-selection, right-click context menus, and drag-and-drop to service schedule.",
+        "Complete Backup Studio: Import and export songs, schedules, display routing, and offline 66-book Bibles.",
+        "Universal Bible Importer Fix: Seamless round-trip import for exported FreeWorship Bible JSON files (including 'freeworship-backup-v1' bundles and multi-translation maps)."
+      ]
+    },
+    {
+      "version": "1.0.0",
+      "date": "November 8, 2026",
+      "platform": "Windows & Android",
+      "title": "Initial Release of FreeWorship Studio",
+      "highlights": [
+        "Zero-latency multi-monitor broadcast presentation suite for churches.",
+        "2nd Screen Projector / LED Wall output with borderless fullscreen.",
+        "3rd Screen Stage Confidence Monitor with timer, chords, and live alerts.",
+        "Instant emergency panic controls: Blackout [B], Logo [L], Clear Text [C], Restore [Esc].",
+        "12-Key Cathedral Ambient Worship Pad synthesizer with 2.2s stereo crossfade.",
+        "Multi-track audio player with smooth 3-second booth fade out.",
+        "Typography, word-wrapping, and interactive 16:9 text boundary box designer.",
+        "Offline 66-book KJV Bible database with chapter and verse jump navigation.",
+        "Service Schedule run-of-show planner with instant section jump tags."
+      ]
+    }
+  ]
+}

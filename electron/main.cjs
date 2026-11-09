@@ -640,6 +640,32 @@ app.whenReady().then(() => {
     }
   });
 
+  // Persistent User Song Library Storage (Guaranteed survival across app updates and uninstalls)
+  ipcMain.handle('freeworship:save-user-songs', async (_event, songsJson) => {
+    try {
+      const p = path.join(app.getPath('userData'), 'user_library_songs.json');
+      await fs.promises.writeFile(p, songsJson, 'utf8');
+      return { ok: true };
+    } catch (err) {
+      console.error('Failed to save user songs to disk:', err);
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('freeworship:load-user-songs', async () => {
+    try {
+      const p = path.join(app.getPath('userData'), 'user_library_songs.json');
+      if (fs.existsSync(p)) {
+        const data = await fs.promises.readFile(p, 'utf8');
+        return { ok: true, data };
+      }
+      return { ok: true, data: null };
+    } catch (err) {
+      console.error('Failed to load user songs from disk:', err);
+      return { ok: false, error: err.message };
+    }
+  });
+
   screen.on('display-added', notifyWindowStatus);
   screen.on('display-removed', notifyWindowStatus);
   screen.on('display-metrics-changed', notifyWindowStatus);
