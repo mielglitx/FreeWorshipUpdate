@@ -28,21 +28,20 @@ if (!token) {
 
 const REPO_OWNER = 'mielglitx';
 const REPO_NAME = 'FreeWorshipUpdate';
-const TAG_NAME = 'v1.1.5';
-const RELEASE_TITLE = 'FreeWorship v1.1.5 - 100% Built-in Offline 66-Book Bibles (KJV, NIV, NASB, ESV, MBB 1901) & Zero Internet Requirement';
+const TAG_NAME = 'v1.1.6';
+const RELEASE_TITLE = 'FreeWorship v1.1.6 - MBB 1901 Complete 66-Book Resolution, Double-Click Preview to Live & Save/Load Schedule File';
 
-const RELEASE_BODY = `## FreeWorship v1.1.5 Update
+const RELEASE_BODY = `## FreeWorship v1.1.6 Update
 
 ### 🚀 Highlights & Major Features
-- **100% Pre-bundled Offline Bibles (Zero Internet Required)**: All 5 sanctuary standard translations (**KJV**, **NIV**, **NASB**, **ESV**, and **MBB 1901**) are now completely built-in and packaged directly with the application on both Windows Desktop and Android. Eliminated any need to download Bibles over the internet or CDN.
-- **Full 66-Book Magandang Balita Bibliya (MBB 1901) Fix**: Resolved missing verses by establishing strict canonical 1-to-1 mapping for all 66 Tagalog book names (*Genesis* through *Pahayag*), allowing instant filtering, chapter navigation, and full-text search.
-- **Enhanced Bible Import Parser**: Expanded natural language Tagalog and Spanish book aliases across all 66 books, ensuring any imported external JSON or Zefania/OpenSong XML files map correctly.
-- **Sanctuary Offline Indicator**: Cleaned up Bible management header to display a permanent green **Built-in Offline** status badge.
+- **MBB 1901 Complete 66-Book Verse Resolution**: Fixed issue where books after 2 Samuel appeared empty due to old uncanonical IndexedDB caches. Added canonical English verification and automatic Tagalog book name resolution, ensuring all 66 books from Genesis through Revelation (Pahayag) display all 31,088 authentic verses.
+- **Double-Click Preview to Project Live**: Single-clicking any slide in the Preview Deck now strictly inspects and focuses the verse in the preview workspace without disturbing the live sanctuary display. Double-clicking any preview slide (or pressing the dedicated "Live" / "Go Live" action button) immediately projects that slide to the live screens.
+- **Save & Load Schedule from File**: Added prominent **Save Schedule** and **Load Schedule** buttons directly in the Service Schedule header. Allows saving and opening \`.fws.json\` and standard \`.json\` schedule files with instant visual confirmation.
 
 ### 📥 Direct Downloads
-- **Windows Setup Installer**: [FreeWorship Studio-Setup-1.1.5.exe](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.5/FreeWorship.Studio-Setup-1.1.5.exe)
-- **Windows Portable**: [FreeWorship Studio-Portable-1.1.5.exe](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.5/FreeWorship.Studio-Portable-1.1.5.exe)
-- **Android Remote APK**: [FreeWorship-StageController.apk](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.5/FreeWorship-StageController.apk)
+- **Windows Setup Installer**: [FreeWorship Studio-Setup-1.1.6.exe](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.6/FreeWorship.Studio-Setup-1.1.6.exe)
+- **Windows Portable**: [FreeWorship Studio-Portable-1.1.6.exe](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.6/FreeWorship.Studio-Portable-1.1.6.exe)
+- **Android Remote APK**: [FreeWorship-StageController.apk](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.6/FreeWorship-StageController.apk)
 `;
 
 function request(options, data) {
@@ -170,13 +169,13 @@ async function main() {
   const existingAssets = release.assets || [];
   const filesToUpload = [
     {
-      filePath: path.resolve(__dirname, '../release/FreeWorship Studio-Setup-1.1.5.exe'),
-      name: 'FreeWorship.Studio-Setup-1.1.5.exe',
+      filePath: path.resolve(__dirname, '../release/FreeWorship Studio-Setup-1.1.6.exe'),
+      name: 'FreeWorship.Studio-Setup-1.1.6.exe',
       contentType: 'application/vnd.microsoft.portable-executable',
     },
     {
-      filePath: path.resolve(__dirname, '../release/FreeWorship Studio-Portable-1.1.5.exe'),
-      name: 'FreeWorship.Studio-Portable-1.1.5.exe',
+      filePath: path.resolve(__dirname, '../release/FreeWorship Studio-Portable-1.1.6.exe'),
+      name: 'FreeWorship.Studio-Portable-1.1.6.exe',
       contentType: 'application/vnd.microsoft.portable-executable',
     },
     {

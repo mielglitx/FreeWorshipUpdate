@@ -311,9 +311,22 @@ export function parseBackupOrModuleJson(rawText: string): FreeWorshipBackupBundl
     return parsed as FreeWorshipBackupBundle;
   }
 
-  // Raw array detection (e.g. raw SongItem[] or ScheduleItem[])
+  // Raw array detection (e.g. raw ScheduleItem[] or SongItem[])
   if (Array.isArray(parsed)) {
     const first = parsed[0];
+    if (
+      first &&
+      Array.isArray(first.slides) &&
+      ('type' in first || 'backgroundId' in first || 'themeId' in first)
+    ) {
+      return {
+        format: 'freeworship-backup-v1',
+        version: '1.0.0',
+        exportedAt: new Date().toISOString(),
+        scope: 'schedule',
+        schedule: parsed as ScheduleItem[],
+      };
+    }
     if (first && (Array.isArray(first.slides) || (first.title && (first.author || first.lyrics || first.slides)))) {
       return {
         format: 'freeworship-backup-v1',
@@ -321,15 +334,6 @@ export function parseBackupOrModuleJson(rawText: string): FreeWorshipBackupBundl
         exportedAt: new Date().toISOString(),
         scope: 'songs',
         songs: parsed.map((s: any) => normalizeSongItem(s)),
-      };
-    }
-    if (first && Array.isArray(first.slides) && 'type' in first) {
-      return {
-        format: 'freeworship-backup-v1',
-        version: '1.0.0',
-        exportedAt: new Date().toISOString(),
-        scope: 'schedule',
-        schedule: parsed as ScheduleItem[],
       };
     }
     if (first && 'fontFamily' in first && 'textColor' in first) {
@@ -398,9 +402,10 @@ export function parseBackupOrModuleJson(rawText: string): FreeWorshipBackupBundl
 
   // Object with top-level keys
   if (parsed && typeof parsed === 'object') {
+    const schedArr = parsed.schedule || parsed.serviceSchedule || parsed.runOfShow;
     if (
       parsed.songs ||
-      parsed.schedule ||
+      schedArr ||
       parsed.bibles ||
       parsed.settings ||
       parsed.routingSettings ||
@@ -410,10 +415,10 @@ export function parseBackupOrModuleJson(rawText: string): FreeWorshipBackupBundl
         format: 'freeworship-backup-v1',
         version: '1.0.0',
         exportedAt: new Date().toISOString(),
-        scope: 'full',
+        scope: schedArr && !parsed.songs && !parsed.bibles ? 'schedule' : 'full',
         songs: Array.isArray(parsed.songs) ? parsed.songs : undefined,
         bibles: parsed.bibles && typeof parsed.bibles === 'object' ? parsed.bibles : undefined,
-        schedule: Array.isArray(parsed.schedule) ? parsed.schedule : undefined,
+        schedule: Array.isArray(schedArr) ? schedArr : undefined,
         settings: parsed.settings || {
           themes: Array.isArray(parsed.themes) ? parsed.themes : undefined,
           routingSettings: parsed.routingSettings,

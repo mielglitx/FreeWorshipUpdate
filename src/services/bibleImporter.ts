@@ -31,7 +31,7 @@ export const BIBLE_BOOKS_66: CanonicalBook[] = [
   { number: 19, name: 'Psalms', testament: 'OT', chapters: 150, aliases: ['psalm', 'ps', 'psa', 'psm', 'pss', 'mga awit', 'awit', 'salmos'] },
   { number: 20, name: 'Proverbs', testament: 'OT', chapters: 31, aliases: ['prov', 'prv', 'pr', 'pro', 'mga kawikaan', 'kawikaan', 'proverbios'] },
   { number: 21, name: 'Ecclesiastes', testament: 'OT', chapters: 12, aliases: ['eccl', 'ecc', 'ec', 'qoh', 'eclesiastes', 'mangaral'] },
-  { number: 22, name: 'Song of Solomon', testament: 'OT', chapters: 8, aliases: ['song', 'sos', 'so', 'canticles', 'song of songs', 'ang awit ni solomon', 'awit ng mga awit', 'cantares'] },
+  { number: 22, name: 'Song of Solomon', testament: 'OT', chapters: 8, aliases: ['song', 'sos', 'so', 'canticles', 'song of songs', 'ang awit ni solomon', 'ang awit ng mga awit', 'awit ng mga awit', 'cantares'] },
   { number: 23, name: 'Isaiah', testament: 'OT', chapters: 66, aliases: ['isa', 'is', 'isaias'] },
   { number: 24, name: 'Jeremiah', testament: 'OT', chapters: 52, aliases: ['jer', 'je', 'jr', 'jeremias'] },
   { number: 25, name: 'Lamentations', testament: 'OT', chapters: 5, aliases: ['lam', 'la', 'mga panaghoy', 'panaghoy', 'lamentaciones'] },
@@ -55,7 +55,7 @@ export const BIBLE_BOOKS_66: CanonicalBook[] = [
   { number: 41, name: 'Mark', testament: 'NT', chapters: 16, aliases: ['mrk', 'mk', 'mr', 'marcos'] },
   { number: 42, name: 'Luke', testament: 'NT', chapters: 24, aliases: ['luk', 'lk', 'lu', 'lucas'] },
   { number: 43, name: 'John', testament: 'NT', chapters: 21, aliases: ['jhn', 'jn', 'joh', 'juan'] },
-  { number: 44, name: 'Acts', testament: 'NT', chapters: 28, aliases: ['act', 'ac', 'acts of the apostles', 'mga gawa', 'gawa', 'hechos'] },
+  { number: 44, name: 'Acts', testament: 'NT', chapters: 28, aliases: ['act', 'ac', 'acts of the apostles', 'ang mga gawa', 'mga gawa', 'gawa', 'hechos'] },
   { number: 45, name: 'Romans', testament: 'NT', chapters: 16, aliases: ['rom', 'ro', 'rm', 'mga taga-roma', 'taga-roma', 'roma', 'romanos'] },
   { number: 46, name: '1 Corinthians', testament: 'NT', chapters: 16, aliases: ['1cor', '1co', 'i corinthians', 'first corinthians', '1 mga taga-corinto', '1 corinto', '1 corintios'] },
   { number: 47, name: '2 Corinthians', testament: 'NT', chapters: 13, aliases: ['2cor', '2co', 'ii corinthians', 'second corinthians', '2 mga taga-corinto', '2 corinto', '2 corintios'] },
@@ -713,6 +713,18 @@ export async function deleteBibleFromIndexedDB(code: string): Promise<void> {
 }
 
 /**
+ * Verifies that a Bible translation array contains canonical English book names
+ * across all 66 books, preventing stale or partially localized IndexedDB records
+ * from masking missing verses.
+ */
+export function isBibleCanonicallyIndexed(verses: BibleVerse[]): boolean {
+  if (!Array.isArray(verses) || verses.length < 30000) return false;
+  // Key canonical check points across OT and NT
+  const testBooks = ['Genesis', '1 Kings', 'Psalms', 'Isaiah', 'Matthew', 'John', 'Romans', 'Revelation'];
+  return testBooks.every((bName) => verses.some((v) => v.book === bName));
+}
+
+/**
  * Loads a built-in 66-book Bible (KJV, NIV, NASB, ESV, MBB 1901) directly from
  * local storage, desktop IPC, or bundled application assets.
  * 100% offline, zero internet or download required.
@@ -729,15 +741,29 @@ export async function loadBuiltInBible(code: string): Promise<BibleVerse[]> {
   if (!entry) return [];
   const [canonicalCode, meta] = entry;
 
-  // 1. Check IndexedDB cache first
+  // 1. Check IndexedDB cache first — ONLY accept if fully canonical across all 66 books
   try {
     const allCached = await loadAllBiblesFromIndexedDB();
-    if (allCached[canonicalCode] && allCached[canonicalCode].length > 20000) {
-      return allCached[canonicalCode];
+    const cached = allCached[canonicalCode];
+    if (cached && isBibleCanonicallyIndexed(cached)) {
+      return cached;
+    }
+    if (cached && !isBibleCanonicallyIndexed(cached)) {
+      console.warn(`Cached Bible for ${canonicalCode} is incomplete or uncanonical; reloading from bundled bundle.`);
     }
   } catch (err) {
     console.warn('IndexedDB check failed, loading from local bundle:', err);
   }
+
+  const normalizeVerses = (rawArr: any[]): BibleVerse[] => {
+    return rawArr.map((v: any) => ({
+      book: resolveBookName(v.book || v.book_name || v.b || 1),
+      chapter: Number(v.chapter || v.c || 1),
+      verse: Number(v.verse || v.v || 1),
+      text: String(v.text || v.t || '').trim(),
+      translation: canonicalCode,
+    }));
+  };
 
   // 2. In Electron desktop, read directly from local disk via IPC
   if (typeof window !== 'undefined' && window.freeworshipDesktop?.loadBuiltInBibleFile) {
@@ -746,8 +772,9 @@ export async function loadBuiltInBible(code: string): Promise<BibleVerse[]> {
       if (fileText) {
         const parsed = JSON.parse(fileText);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          saveBibleToIndexedDB(canonicalCode, parsed).catch(() => {});
-          return parsed as BibleVerse[];
+          const normalized = normalizeVerses(parsed);
+          saveBibleToIndexedDB(canonicalCode, normalized).catch(() => {});
+          return normalized;
         }
       }
     } catch (err) {
@@ -767,8 +794,9 @@ export async function loadBuiltInBible(code: string): Promise<BibleVerse[]> {
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
-          saveBibleToIndexedDB(canonicalCode, data).catch(() => {});
-          return data as BibleVerse[];
+          const normalized = normalizeVerses(data);
+          saveBibleToIndexedDB(canonicalCode, normalized).catch(() => {});
+          return normalized;
         }
       }
     } catch {

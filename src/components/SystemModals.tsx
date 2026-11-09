@@ -17,7 +17,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 
-export const APP_VERSION = '1.1.5';
+export const APP_VERSION = '1.1.6';
 export const APP_RELEASE_DATE = 'November 9, 2026';
 export const GITHUB_UPDATE_REPO = 'https://github.com/mielglitx/FreeWorshipUpdate';
 export const GITHUB_RELEASES_API =
@@ -25,7 +25,7 @@ export const GITHUB_RELEASES_API =
 export const GITHUB_RAW_UPDATES_URL =
   'https://raw.githubusercontent.com/mielglitx/FreeWorshipUpdate/main/updates.json';
 export const GITHUB_RAW_APK_URL =
-  'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.5/FreeWorship-StageController.apk';
+  'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.6/FreeWorship-StageController.apk';
 
 /**
  * Semver comparison: returns true ONLY if remoteVersion is strictly greater than currentVersion.
@@ -57,6 +57,17 @@ export interface ChangelogItem {
 }
 
 export const APP_CHANGELOG: ChangelogItem[] = [
+  {
+    version: '1.1.6',
+    date: 'November 9, 2026',
+    platform: 'Windows & Android',
+    title: 'MBB 1901 Complete 66-Book Resolution, Double-Click Live Projection & Save/Load Schedule File',
+    highlights: [
+      'MBB 1901 Full 66-Book Verse Resolution: Resolved empty book issue from 1 Kings to Revelation by invalidating stale uncanonical caches, auto-normalizing localized names, and seeding all 31,088 authentic Tagalog verses from Genesis through Pahayag.',
+      'Double-Click Preview to Project Live: Single-clicking a preview slide now strictly inspects and focuses the verse in the preview workspace without disturbing the live sanctuary display. Double-clicking any preview slide (or clicking explicit Live) projects it live.',
+      'Save & Load Schedule from File: Added dedicated 1-click "Save Schedule" and "Load Schedule" buttons in the Service Schedule header with support for .fws.json and standard .json schedule files and instant visual confirmation.',
+    ],
+  },
   {
     version: '1.1.5',
     date: 'November 9, 2026',
@@ -427,7 +438,7 @@ export const WelcomeAboutModal: React.FC<WelcomeAboutModalProps> = ({
 
   const handleDownloadAndInstallUpdate = async () => {
     const defaultWinUrl =
-      'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.5/FreeWorship.Studio-Setup-1.1.5.exe';
+      'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.6/FreeWorship.Studio-Setup-1.1.6.exe';
     const targetUrl =
       updateStatus.downloadUrl || (isAndroid ? GITHUB_RAW_APK_URL : defaultWinUrl);
 

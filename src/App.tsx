@@ -42,6 +42,8 @@ import {
   PlayCircle,
   Columns,
   Image as ImageIcon,
+  FolderOpen,
+  Save,
 } from 'lucide-react';
 import {
   BIBLE_DATABASE,
@@ -82,10 +84,12 @@ import {
   BIBLE_EDITIONS,
   BuiltInBibleEdition,
   fetchAndInstallPublicDomainBible,
+  isBibleCanonicallyIndexed,
   loadAllBiblesFromIndexedDB,
   loadBuiltInBible,
   parseBibleFile,
   parseScriptureReference,
+  resolveBookName,
   saveBibleToIndexedDB,
 } from './services/bibleImporter';
 import {
@@ -204,6 +208,7 @@ const OperatorConsole: React.FC = () => {
   const [schedule, setSchedule] = useState<ScheduleItem[]>(() =>
     loadPersisted(STORAGE_KEYS.SCHEDULE, DEFAULT_SERVICE_SCHEDULE)
   );
+  const [scheduleNotice, setScheduleNotice] = useState<string | null>(null);
   const [mediaPool, setMediaPool] = useState<MediaAsset[]>(() =>
     loadPersisted(STORAGE_KEYS.MEDIA, DEFAULT_MEDIA_POOL)
   );
@@ -437,14 +442,16 @@ const OperatorConsole: React.FC = () => {
           }
         });
 
-        // Preload built-in translations if missing or incomplete
+        // Preload built-in translations if missing or uncanonical
         const builtInCodes = ['KJV', 'NIV', 'NASB', 'ESV', 'MBB 1901'];
         for (const code of builtInCodes) {
-          if (!filteredLoaded[code] || filteredLoaded[code].length < 20000) {
+          const current = filteredLoaded[code];
+          if (!current || !isBibleCanonicallyIndexed(current)) {
             try {
               const builtInVerses = await loadBuiltInBible(code);
               if (builtInVerses.length > 0) {
                 filteredLoaded[code] = builtInVerses;
+                await saveBibleToIndexedDB(code, builtInVerses);
               }
             } catch (err) {
               console.warn(`Failed preloading built-in ${code}:`, err);
@@ -1173,7 +1180,19 @@ const OperatorConsole: React.FC = () => {
     e.target.value = '';
   };
 
-  // Import Schedule (.fws.json) directly from the Service Schedule header
+  // Save Schedule (.fws.json) directly to disk
+  const handleSaveScheduleToFile = () => {
+    if (schedule.length === 0) {
+      setScheduleNotice('Cannot save: Service schedule is currently empty.');
+      setTimeout(() => setScheduleNotice(null), 3500);
+      return;
+    }
+    exportScheduleJson(schedule, themes);
+    setScheduleNotice(`✓ Saved schedule (${schedule.length} item${schedule.length > 1 ? 's' : ''}) to file.`);
+    setTimeout(() => setScheduleNotice(null), 3500);
+  };
+
+  // Load Schedule (.fws.json or .json) directly from file into Run-of-Show
   const handleScheduleJsonImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1182,9 +1201,16 @@ const OperatorConsole: React.FC = () => {
       const bundle = parseBackupOrModuleJson(text);
       if (bundle.schedule && bundle.schedule.length > 0) {
         await handleApplyImportedBundle(bundle, 'replace');
+        setScheduleNotice(`✓ Successfully loaded Schedule with ${bundle.schedule.length} item(s) from ${file.name}`);
+        setTimeout(() => setScheduleNotice(null), 4000);
+      } else {
+        setScheduleNotice(`Notice: No valid schedule items found in ${file.name}`);
+        setTimeout(() => setScheduleNotice(null), 4000);
       }
     } catch (err) {
       console.error('Failed to import schedule JSON:', err);
+      setScheduleNotice(`Load error: ${err instanceof Error ? err.message : 'Invalid schedule file'}`);
+      setTimeout(() => setScheduleNotice(null), 4000);
     }
     e.target.value = '';
   };
@@ -1332,7 +1358,7 @@ const OperatorConsole: React.FC = () => {
     }
     if (
       ['KJV', 'NIV', 'NASB', 'ESV', 'MBB 1901'].includes(selectedTranslation) &&
-      (!customBibles[selectedTranslation] || customBibles[selectedTranslation].length < 20000)
+      (!customBibles[selectedTranslation] || !isBibleCanonicallyIndexed(customBibles[selectedTranslation]))
     ) {
       loadBuiltInBible(selectedTranslation).then((verses) => {
         if (verses && verses.length > 0) {
@@ -1344,10 +1370,19 @@ const OperatorConsole: React.FC = () => {
 
   const activeTranslationVerses: BibleVerse[] = useMemo(() => {
     const customList = customBibles[selectedTranslation];
-    if (customList && customList.length > 0) {
-      return customList;
+    const source =
+      customList && customList.length > 0
+        ? customList
+        : BIBLE_DATABASE.filter((v) => v.translation === selectedTranslation);
+
+    // Auto-normalize: If any verse has a localized book name, map it to canonical English name
+    if (
+      source.length > 0 &&
+      source.some((v) => v.book === '1 Mga Hari' || v.book === 'Mateo' || v.book === 'Juan' || v.book === 'Exodo')
+    ) {
+      return source.map((v) => ({ ...v, book: resolveBookName(v.book) }));
     }
-    return BIBLE_DATABASE.filter((v) => v.translation === selectedTranslation);
+    return source;
   }, [customBibles, selectedTranslation]);
 
   const availableChaptersForBook = useMemo(() => {
@@ -2066,10 +2101,14 @@ const OperatorConsole: React.FC = () => {
                 key={`preview-${tag}-${index}`}
                 onClick={() => {
                   setPreviewSlideIndex(index);
+                }}
+                onDoubleClick={() => {
+                  setPreviewSlideIndex(index);
                   if (previewSong) {
                     showSongOnLiveDirectly(previewSong, index);
                   }
                 }}
+                title={`Preview ${tag} (Double-click to Project Live)`}
                 className={`px-2 py-0.5 rounded-md text-xs font-bold border transition ${
                   isCurrentSection
                     ? 'bg-amber-400 text-black border-amber-300 shadow font-black'
@@ -2425,10 +2464,14 @@ const OperatorConsole: React.FC = () => {
                 key={slide.id}
                 onClick={() => {
                   setPreviewSlideIndex(idx);
+                }}
+                onDoubleClick={() => {
+                  setPreviewSlideIndex(idx);
                   if (previewSong) {
                     showSongOnLiveDirectly(previewSong, idx);
                   }
                 }}
+                title="Click to preview • Double-click to Project Live"
                 className={`relative rounded-xl border-2 p-3 flex flex-col justify-between transition-all cursor-pointer min-h-[148px] ${
                   isLiveOnProjector
                     ? 'bg-emerald-950/30 border-emerald-400 ring-2 ring-emerald-500/40 shadow-xl'
@@ -2534,10 +2577,14 @@ const OperatorConsole: React.FC = () => {
               key={slide.id}
               onClick={() => {
                 setPreviewSlideIndex(idx);
+              }}
+              onDoubleClick={() => {
+                setPreviewSlideIndex(idx);
                 if (previewSong) {
                   showSongOnLiveDirectly(previewSong, idx);
                 }
               }}
+              title="Click to preview • Double-click to Project Live"
               className={`rounded-xl border-2 p-3 transition-all cursor-pointer flex items-center justify-between gap-3 ${
                 isLiveOnProjector
                   ? 'bg-emerald-950/30 border-emerald-400 ring-2 ring-emerald-500/40 shadow-md'
@@ -2646,7 +2693,7 @@ const OperatorConsole: React.FC = () => {
       <input
         ref={scheduleJsonImportInputRef}
         type="file"
-        accept=".json"
+        accept=".json,.fws.json"
         onChange={handleScheduleJsonImport}
         className="hidden"
       />
@@ -4094,22 +4141,34 @@ const OperatorConsole: React.FC = () => {
             <div className="grid grid-cols-2 gap-1.5">
               <button
                 onClick={() => scheduleJsonImportInputRef.current?.click()}
-                className="py-1 px-2 rounded-lg bg-booth-900 hover:bg-booth-800 border border-booth-700 text-[10px] font-bold text-sky-300 flex items-center justify-center gap-1"
-                title="Import / Load a saved Service Schedule (.fws.json)"
+                className="py-1 px-2 rounded-lg bg-booth-900 hover:bg-booth-800 border border-booth-700 text-[10px] font-bold text-sky-300 flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95"
+                title="Load a saved Service Schedule from a file (.fws.json or .json)"
               >
-                <Upload className="w-3 h-3" />
-                <span>Import Schedule</span>
+                <FolderOpen className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                <span className="truncate">Load Schedule</span>
               </button>
               <button
-                onClick={() => exportScheduleJson(schedule, themes)}
+                onClick={handleSaveScheduleToFile}
                 disabled={schedule.length === 0}
-                className="py-1 px-2 rounded-lg bg-booth-900 hover:bg-booth-800 border border-booth-700 text-[10px] font-bold text-emerald-300 flex items-center justify-center gap-1 disabled:opacity-30"
-                title="Save / Export this Service Schedule (.fws.json)"
+                className="py-1 px-2 rounded-lg bg-booth-900 hover:bg-booth-800 border border-booth-700 text-[10px] font-bold text-emerald-300 flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                title="Save current Service Schedule to an offline file (.fws.json)"
               >
-                <Download className="w-3 h-3" />
-                <span>Export Schedule</span>
+                <Save className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span className="truncate">Save Schedule</span>
               </button>
             </div>
+
+            {scheduleNotice && (
+              <div className="text-[10px] font-bold px-2.5 py-1 rounded-md bg-sky-950/80 border border-sky-500/40 text-sky-200 flex items-center justify-between gap-1 shadow">
+                <span className="truncate">{scheduleNotice}</span>
+                <button
+                  onClick={() => setScheduleNotice(null)}
+                  className="text-slate-400 hover:text-white shrink-0 ml-1 text-xs"
+                >
+                  ×
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Schedule Timeline List */}

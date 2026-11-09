@@ -4,6 +4,21 @@ All notable changes to the **FreeWorship Studio** (Windows Desktop Presentation 
 
 ---
 
+## [1.1.6] — November 9, 2026
+
+### 🚀 Highlights & Major Features
+- **MBB 1901 Complete 66-Book Verse Resolution**:
+  - Fixed issue where books after 2 Samuel appeared empty due to old uncanonical IndexedDB caches.
+  - Added strict canonical English book verification (`isBibleCanonicallyIndexed`) and automatic Tagalog book name resolution (`resolveBookName`), ensuring all 66 books from Genesis through Revelation (Pahayag) display all 31,088 authentic verses.
+- **Double-Click Preview to Project Live**:
+  - Single-clicking any slide in the Preview Deck now only selects and inspects that verse in the preview panel, preventing accidental changes to sanctuary projection.
+  - Double-clicking any preview slide (or pressing the dedicated "Live" / "Go Live" action button) immediately projects that slide to the live screens.
+- **Save & Load Schedule from File**:
+  - Added prominent **Save Schedule** and **Load Schedule** buttons directly in the Service Schedule header.
+  - Allows saving and opening `.fws.json` and standard `.json` schedule files with instant visual confirmation and automatic activation of the first schedule item.
+
+---
+
 ## [1.1.5] — November 9, 2026
 
 ### 🚀 Highlights & Major Features

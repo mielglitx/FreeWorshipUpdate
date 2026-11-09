@@ -1,27 +1,38 @@
 {
-  "version": "1.1.5",
+  "version": "1.1.6",
   "releaseDate": "November 9, 2026",
   "author": "Amiel Yalung",
   "repository": "https://github.com/mielglitx/FreeWorshipUpdate",
   "windows": {
-    "version": "1.1.5",
+    "version": "1.1.6",
     "releaseDate": "November 9, 2026",
     "appName": "FreeWorship Studio (Windows)",
-    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.5/FreeWorship.Studio-Setup-1.1.5.exe",
+    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.6/FreeWorship.Studio-Setup-1.1.6.exe",
     "portableUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases",
-    "fileName": "FreeWorship Studio-Setup-1.1.5.exe",
-    "notes": "v1.1.5 update: 100% Built-in Offline 66-Book Bibles (KJV, NIV, NASB, ESV, and MBB 1901) pre-bundled into app with zero downloads and zero internet required, complete MBB 1901 verse resolution, and offline stability fixes."
+    "fileName": "FreeWorship Studio-Setup-1.1.6.exe",
+    "notes": "v1.1.6 update: Resolved MBB 1901 verses for books beyond 2 Samuel with canonical validation and auto-normalization, double-click preview slide live projection, and 1-click Save/Load Schedule file feature."
   },
   "android": {
-    "version": "1.1.5",
+    "version": "1.1.6",
     "releaseDate": "November 9, 2026",
     "appName": "FreeWorship Android Remote & 3rd Monitor",
-    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.5/FreeWorship-StageController.apk",
+    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.6/FreeWorship-StageController.apk",
     "fallbackDownloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/raw/main/FreeWorship-StageController.apk",
     "fileName": "FreeWorship-StageController.apk",
-    "notes": "v1.1.5 update: Complete offline built-in 66-book Bibles included directly in Android assets, instant scripture retrieval, and full MBB 1901 verse support."
+    "notes": "v1.1.6 update: All 66 books of MBB 1901 Tagalog Bible verified offline, double-tap preview controls, and remote schedule loading."
   },
   "changelog": [
+    {
+      "version": "1.1.6",
+      "date": "November 9, 2026",
+      "platform": "Windows & Android",
+      "title": "MBB 1901 Complete 66-Book Resolution, Double-Click Live Projection & Save/Load Schedule File",
+      "highlights": [
+        "MBB 1901 Full 66-Book Verse Resolution: Resolved empty book issue from 1 Kings to Revelation by invalidating stale uncanonical caches, auto-normalizing localized names, and seeding all 31,088 authentic Tagalog verses from Genesis through Pahayag.",
+        "Double-Click Preview to Project Live: Single-clicking a preview slide now strictly inspects and focuses the verse in the preview workspace without disturbing the live sanctuary display. Double-clicking any preview slide (or clicking explicit Live) projects it live.",
+        "Save & Load Schedule from File: Added dedicated 1-click 'Save Schedule' and 'Load Schedule' buttons in the Service Schedule header with support for .fws.json and standard .json schedule files and instant visual confirmation."
+      ]
+    },
     {
       "version": "1.1.5",
       "date": "November 9, 2026",
