@@ -4,6 +4,28 @@ All notable changes to the **FreeWorship Studio** (Windows Desktop Presentation 
 
 ---
 
+## [1.1.7] — November 9, 2026
+
+### 🚀 Highlights & Major Features
+- **Android Cleartext Traffic & Network Security Config**:
+  - Added an explicit Android network security configuration (`network_security_config.xml`) permitting cleartext HTTP traffic across local LAN subnets (`192.168.0.0/16`, `10.0.0.0/8`, `172.16.0.0/12`, `localhost`).
+  - Added `MIXED_CONTENT_ALWAYS_ALLOW` and content access flags to Android WebView settings in `MainActivity.java`.
+  - Added missing Android permissions (`ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE`, `CHANGE_WIFI_MULTICAST_STATE`), completely eliminating Android 9+ system-level silent socket blocking of local HTTP requests.
+- **Native Wi-Fi Subnet Detection & Zero-Guesswork Auto-Discovery**:
+  - Implemented a native Android network plugin method `getDeviceWifiIp()` that directly inspects hardware network interfaces to extract the device's real local IPv4 address and subnet prefix.
+  - Added full support for modern mesh Wi-Fi subnets (including TP-Link Deco `192.168.68.x`), major Philippine ISPs (PLDT `192.168.254.x` / `192.168.1.x`, Globe `192.168.100.x`, Converge `192.168.8.x`), and mobile hotspots.
+  - Accelerated subnet scanning with priority octets (100–150 first, then full sweep) and 500ms abort signals, finding host PCs in under 2 seconds.
+- **Dual-Port Windows Host & Resilient Host Normalization**:
+  - Windows built-in LAN server now listens simultaneously on primary port `5174` and alias port `5173` with universal CORS headers (`*`).
+  - Added health/ping endpoints (`/`, `/ping`, `/health`) allowing fast connectivity verification.
+  - Hardened URL normalization in `normalizeHostUrl` to cleanly strip protocol prefixes (`http://`, `https://`) and trailing endpoints (`/api/lan-sync`), automatically attaching port `:5174` when omitted.
+  - Added real-time connection status feedback on Android ("Connecting...", "Connected!", or actionable diagnostics).
+- **Operator Android Remote Header Bar & Windows Firewall Helper**:
+  - Added a dedicated "Android Remote" button in the Windows top navigation bar showing the active LAN IP (e.g. `192.168.68.130:5174`) and a green pulsing indicator when devices are connected.
+  - Created a dedicated `LanRemoteModal` dialog with 1-click IP copy, connection instructions, and an automated Windows Firewall rule configurator for ports 5174 and 5173.
+
+---
+
 ## [1.1.6] — November 9, 2026
 
 ### 🚀 Highlights & Major Features

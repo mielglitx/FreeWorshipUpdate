@@ -28,20 +28,21 @@ if (!token) {
 
 const REPO_OWNER = 'mielglitx';
 const REPO_NAME = 'FreeWorshipUpdate';
-const TAG_NAME = 'v1.1.6';
-const RELEASE_TITLE = 'FreeWorship v1.1.6 - MBB 1901 Complete 66-Book Resolution, Double-Click Preview to Live & Save/Load Schedule File';
+const TAG_NAME = 'v1.1.7';
+const RELEASE_TITLE = 'FreeWorship v1.1.7 - Bulletproof Android ↔ Windows LAN Sync, Wi-Fi Auto-Discovery & Network Security Config';
 
-const RELEASE_BODY = `## FreeWorship v1.1.6 Update
+const RELEASE_BODY = `## FreeWorship v1.1.7 Update
 
 ### 🚀 Highlights & Major Features
-- **MBB 1901 Complete 66-Book Verse Resolution**: Fixed issue where books after 2 Samuel appeared empty due to old uncanonical IndexedDB caches. Added canonical English verification and automatic Tagalog book name resolution, ensuring all 66 books from Genesis through Revelation (Pahayag) display all 31,088 authentic verses.
-- **Double-Click Preview to Project Live**: Single-clicking any slide in the Preview Deck now strictly inspects and focuses the verse in the preview workspace without disturbing the live sanctuary display. Double-clicking any preview slide (or pressing the dedicated "Live" / "Go Live" action button) immediately projects that slide to the live screens.
-- **Save & Load Schedule from File**: Added prominent **Save Schedule** and **Load Schedule** buttons directly in the Service Schedule header. Allows saving and opening \`.fws.json\` and standard \`.json\` schedule files with instant visual confirmation.
+- **Android Cleartext Traffic & Security Config**: Added explicit Android network security configuration (\`network_security_config.xml\`) and WebView Mixed Content Mode (\`MIXED_CONTENT_ALWAYS_ALLOW\`), completely resolving the Android 9+ system-level silent blocking of local HTTP connections.
+- **Native Wi-Fi Subnet Detection & Zero-Guesswork Auto-Discovery**: Android app now uses a native network plugin to read the device's actual Wi-Fi IPv4 address directly from the hardware network interface (detecting subnets like TP-Link Deco \`192.168.68.x\`, PLDT \`192.168.254.x\` / \`192.168.1.x\`, Globe \`192.168.100.x\`, mobile hotspots, etc.), concurrently scanning both ports 5174 and 5173 with priority DHCP ranges in under 2 seconds.
+- **Dual-Port Windows LAN Server (5174 & 5173) & Resilient Host Normalization**: Windows desktop app now listens simultaneously on port 5174 and alias port 5173 with universal CORS headers (\`*\`). Manual IP connection now automatically normalizes raw IPs, full URLs (e.g. \`http://.../api/lan-sync\`), and missing ports with instant visual status feedback ("Connecting...", "Connected!", or diagnostics).
+- **Operator Android Remote Header Bar & Windows Firewall Helper**: Added an "Android Remote" button in the Windows top header displaying the active LAN IP (e.g. \`192.168.68.130:5174\`) and connected device count with 1-click copy, connection guide, and a 1-click Windows Firewall rule helper.
 
 ### 📥 Direct Downloads
-- **Windows Setup Installer**: [FreeWorship Studio-Setup-1.1.6.exe](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.6/FreeWorship.Studio-Setup-1.1.6.exe)
-- **Windows Portable**: [FreeWorship Studio-Portable-1.1.6.exe](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.6/FreeWorship.Studio-Portable-1.1.6.exe)
-- **Android Remote APK**: [FreeWorship-StageController.apk](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.6/FreeWorship-StageController.apk)
+- **Windows Setup Installer**: [FreeWorship Studio-Setup-1.1.7.exe](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.7/FreeWorship.Studio-Setup-1.1.7.exe)
+- **Windows Portable**: [FreeWorship Studio-Portable-1.1.7.exe](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.7/FreeWorship.Studio-Portable-1.1.7.exe)
+- **Android Remote APK**: [FreeWorship-StageController.apk](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.7/FreeWorship-StageController.apk)
 `;
 
 function request(options, data) {
@@ -169,17 +170,17 @@ async function main() {
   const existingAssets = release.assets || [];
   const filesToUpload = [
     {
-      filePath: path.resolve(__dirname, '../release/FreeWorship Studio-Setup-1.1.6.exe'),
-      name: 'FreeWorship.Studio-Setup-1.1.6.exe',
+      filePath: path.resolve(__dirname, '../release/FreeWorship Studio-Setup-1.1.7.exe'),
+      name: 'FreeWorship.Studio-Setup-1.1.7.exe',
       contentType: 'application/vnd.microsoft.portable-executable',
     },
     {
-      filePath: path.resolve(__dirname, '../release/FreeWorship Studio-Portable-1.1.6.exe'),
-      name: 'FreeWorship.Studio-Portable-1.1.6.exe',
+      filePath: path.resolve(__dirname, '../release/FreeWorship Studio-Portable-1.1.7.exe'),
+      name: 'FreeWorship.Studio-Portable-1.1.7.exe',
       contentType: 'application/vnd.microsoft.portable-executable',
     },
     {
-      filePath: path.resolve(__dirname, '../FreeWorship-StageController.apk'),
+      filePath: path.resolve(__dirname, '../public/FreeWorship-StageController.apk'),
       name: 'FreeWorship-StageController.apk',
       contentType: 'application/vnd.android.package-archive',
     },
