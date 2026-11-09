@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('freeworshipDesktop', {
   saveUserSongs: (songsJson) => ipcRenderer.invoke('freeworship:save-user-songs', songsJson),
   loadUserSongs: () => ipcRenderer.invoke('freeworship:load-user-songs'),
   loadBuiltInBibleFile: (fileName) => ipcRenderer.invoke('freeworship:load-bible-file', fileName),
+  setupFirewallRule: () => ipcRenderer.invoke('freeworship:setup-firewall-rule'),
   onUpdateDownloadProgress: (callback) => {
     const listener = (_event, progress) => callback(progress);
     ipcRenderer.on('freeworship:update-download-progress', listener);

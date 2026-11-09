@@ -73,102 +73,127 @@ function getLocalLanIps() {
   return ips.length > 0 ? ips : ['127.0.0.1'];
 }
 
-function startBuiltInLanServer() {
-  const server = http.createServer((req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+function handleLanHttpRequest(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', '*');
+  res.setHeader('Access-Control-Max-Age', '86400');
 
-    if (req.method === 'OPTIONS') {
-      res.writeHead(204);
-      res.end();
-      return;
-    }
-
-    const clientIp = req.socket.remoteAddress || 'unknown';
-    connectedLanDevices.set(clientIp, Date.now());
-    const now = Date.now();
-    for (const [ip, seen] of connectedLanDevices.entries()) {
-      if (now - seen > 15000) connectedLanDevices.delete(ip);
-    }
-
-    if (req.url && req.url.startsWith('/api/lan-info') && req.method === 'GET') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(
-        JSON.stringify({
-          ok: true,
-          app: 'FreeWorship',
-          service: 'FreeWorship Desktop LAN Server',
-          ips: getLocalLanIps(),
-          port: LAN_SERVER_PORT,
-          connectedDevices: connectedLanDevices.size,
-        })
-      );
-      return;
-    }
-
-    if (req.url && req.url.startsWith('/api/lan-sync') && req.method === 'GET') {
-      const isOperator = req.url.includes('role=operator');
-      const commands = isOperator ? [...pendingRemoteCommands] : [];
-      if (isOperator && pendingRemoteCommands.length > 0) {
-        pendingRemoteCommands = [];
-      }
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(
-        JSON.stringify({
-          ok: true,
-          app: 'FreeWorship',
-          state: latestBroadcastPayload,
-          payload: latestBroadcastPayload,
-          commands,
-          ips: getLocalLanIps(),
-          port: LAN_SERVER_PORT,
-          connectedDevices: connectedLanDevices.size,
-        })
-      );
-      return;
-    }
-
-    if (req.url && req.url.startsWith('/api/lan-sync') && req.method === 'POST') {
-      let body = '';
-      req.on('data', (chunk) => {
-        body += chunk;
-      });
-      req.on('end', () => {
-        try {
-          const data = JSON.parse(body || '{}');
-          if (data.type === 'STATE_UPDATE' && data.payload) {
-            latestBroadcastPayload = data.payload;
-          } else if (data.type === 'REMOTE_COMMAND' && data.command) {
-            pendingRemoteCommands.push({
-              id: `cmd-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-              command: data.command,
-              timestamp: Date.now(),
-            });
-            // Also push directly to operatorWindow via IPC for 0ms execution!
-            if (operatorWindow && !operatorWindow.isDestroyed()) {
-              operatorWindow.webContents.send('freeworship:remote-command', data.command);
-            }
-          }
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: true }));
-        } catch {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: false }));
-        }
-      });
-      return;
-    }
-
-    res.writeHead(404);
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
     res.end();
-  });
+    return;
+  }
 
-  server.on('error', () => {
-    // Ignore if port 5174 is already bound
-  });
+  const clientIp = req.socket.remoteAddress || 'unknown';
+  connectedLanDevices.set(clientIp, Date.now());
+  const now = Date.now();
+  for (const [ip, seen] of connectedLanDevices.entries()) {
+    if (now - seen > 15000) connectedLanDevices.delete(ip);
+  }
 
-  server.listen(LAN_SERVER_PORT, '0.0.0.0');
+  // Quick health / ping probe (allows Android & browsers to test reachability easily)
+  if (!req.url || req.url === '/' || req.url === '/ping' || req.url === '/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(
+      JSON.stringify({
+        ok: true,
+        app: 'FreeWorship',
+        status: 'online',
+        ips: getLocalLanIps(),
+        port: LAN_SERVER_PORT,
+        connectedDevices: connectedLanDevices.size,
+      })
+    );
+    return;
+  }
+
+  if (req.url && req.url.startsWith('/api/lan-info') && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(
+      JSON.stringify({
+        ok: true,
+        app: 'FreeWorship',
+        service: 'FreeWorship Desktop LAN Server',
+        ips: getLocalLanIps(),
+        port: LAN_SERVER_PORT,
+        connectedDevices: connectedLanDevices.size,
+      })
+    );
+    return;
+  }
+
+  if (req.url && req.url.startsWith('/api/lan-sync') && req.method === 'GET') {
+    const isOperator = req.url.includes('role=operator');
+    const commands = isOperator ? [...pendingRemoteCommands] : [];
+    if (isOperator && pendingRemoteCommands.length > 0) {
+      pendingRemoteCommands = [];
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(
+      JSON.stringify({
+        ok: true,
+        app: 'FreeWorship',
+        state: latestBroadcastPayload,
+        payload: latestBroadcastPayload,
+        commands,
+        ips: getLocalLanIps(),
+        port: LAN_SERVER_PORT,
+        connectedDevices: connectedLanDevices.size,
+      })
+    );
+    return;
+  }
+
+  if (req.url && req.url.startsWith('/api/lan-sync') && req.method === 'POST') {
+    let body = '';
+    req.on('data', (chunk) => {
+      body += chunk;
+    });
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body || '{}');
+        if (data.type === 'STATE_UPDATE' && data.payload) {
+          latestBroadcastPayload = data.payload;
+        } else if (data.type === 'REMOTE_COMMAND' && data.command) {
+          pendingRemoteCommands.push({
+            id: `cmd-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            command: data.command,
+            timestamp: Date.now(),
+          });
+          // Also push directly to operatorWindow via IPC for 0ms execution!
+          if (operatorWindow && !operatorWindow.isDestroyed()) {
+            operatorWindow.webContents.send('freeworship:remote-command', data.command);
+          }
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false }));
+      }
+    });
+    return;
+  }
+
+  res.writeHead(404);
+  res.end();
+}
+
+function startBuiltInLanServer() {
+  // Primary LAN Server on Port 5174
+  const server5174 = http.createServer(handleLanHttpRequest);
+  server5174.on('error', (err) => {
+    console.warn('[FreeWorship LAN Server] Port 5174 warning:', err.message);
+  });
+  server5174.listen(LAN_SERVER_PORT, '0.0.0.0');
+
+  // Secondary Alias LAN Server on Port 5173 (ensures older / default saved ports connect seamlessly)
+  const server5173 = http.createServer(handleLanHttpRequest);
+  server5173.on('error', () => {
+    // Port 5173 may already be used by Vite dev server, which is completely expected
+  });
+  server5173.listen(5173, '0.0.0.0');
 }
 
 function getDisplayList() {
@@ -688,6 +713,21 @@ app.whenReady().then(() => {
       console.error('Failed to load local bible file via IPC:', err);
     }
     return null;
+  });
+
+  // Windows Firewall Inbound Rule Helper (Allows LAN Remote on Ports 5174 & 5173)
+  ipcMain.handle('freeworship:setup-firewall-rule', async () => {
+    return new Promise((resolve) => {
+      const cmd =
+        'netsh advfirewall firewall add rule name="FreeWorship LAN Remote (5174)" dir=in action=allow protocol=TCP localport=5174,5173';
+      const child = spawn('cmd.exe', ['/c', cmd]);
+      child.on('close', (code) => {
+        resolve({ ok: code === 0, code });
+      });
+      child.on('error', (err) => {
+        resolve({ ok: false, error: err.message });
+      });
+    });
   });
 
   screen.on('display-added', notifyWindowStatus);

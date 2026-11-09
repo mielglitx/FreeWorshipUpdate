@@ -16,7 +16,12 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
 import java.net.URL;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -24,6 +29,57 @@ import java.util.concurrent.Executors;
 public class ApkUpdaterPlugin extends Plugin {
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
+
+    @PluginMethod
+    public void getDeviceWifiIp(PluginCall call) {
+        JSObject ret = new JSObject();
+        try {
+            List<NetworkInterface> interfaces = Collections.list(NetworkInterface.getNetworkInterfaces());
+            String foundIp = null;
+            // First pass: look specifically for wlan / wi-fi interfaces
+            for (NetworkInterface intf : interfaces) {
+                if (intf.isLoopback() || !intf.isUp()) continue;
+                String name = intf.getName().toLowerCase();
+                if (name.contains("wlan") || name.contains("wifi") || name.contains("ap") || name.contains("eth")) {
+                    List<InetAddress> addrs = Collections.list(intf.getInetAddresses());
+                    for (InetAddress addr : addrs) {
+                        if (!addr.isLoopbackAddress() && addr instanceof Inet4Address) {
+                            String sAddr = addr.getHostAddress();
+                            if (sAddr != null && !sAddr.startsWith("127.")) {
+                                foundIp = sAddr;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (foundIp != null) break;
+            }
+
+            // Fallback pass: any non-loopback IPv4 interface
+            if (foundIp == null) {
+                for (NetworkInterface intf : interfaces) {
+                    if (intf.isLoopback() || !intf.isUp()) continue;
+                    List<InetAddress> addrs = Collections.list(intf.getInetAddresses());
+                    for (InetAddress addr : addrs) {
+                        if (!addr.isLoopbackAddress() && addr instanceof Inet4Address) {
+                            String sAddr = addr.getHostAddress();
+                            if (sAddr != null && !sAddr.startsWith("127.")) {
+                                foundIp = sAddr;
+                                break;
+                            }
+                        }
+                    }
+                    if (foundIp != null) break;
+                }
+            }
+
+            ret.put("ip", foundIp);
+            call.resolve(ret);
+        } catch (Exception e) {
+            ret.put("ip", null);
+            call.resolve(ret);
+        }
+    }
 
     @PluginMethod
     public void canRequestPackageInstalls(PluginCall call) {

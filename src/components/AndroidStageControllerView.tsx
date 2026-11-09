@@ -42,7 +42,21 @@ const SAVED_HOST_KEY = 'freeworship_android_host_url_v1';
 
 type AndroidLayoutMode = 'split' | 'stage-only' | 'controller-only';
 
-// Discover the Android device's own local IPv4 prefix via WebRTC ICE host candidates
+// Discover the Android device's own local IPv4 address via native Capacitor plugin (zero-guesswork)
+async function getNativeDeviceWifiIp(): Promise<string | null> {
+  try {
+    const apkUpdater = (window as any).Capacitor?.Plugins?.ApkUpdater;
+    if (apkUpdater && typeof apkUpdater.getDeviceWifiIp === 'function') {
+      const res = await apkUpdater.getDeviceWifiIp();
+      if (res && res.ip && typeof res.ip === 'string') {
+        return res.ip;
+      }
+    }
+  } catch {}
+  return null;
+}
+
+// Fallback: discover the device's local IPv4 prefix via WebRTC ICE host candidates
 async function detectLocalSubnetPrefix(): Promise<string[]> {
   const foundPrefixes = new Set<string>();
   try {
@@ -89,7 +103,7 @@ export const AndroidStageControllerView: React.FC = () => {
     ) {
       return window.location.host;
     }
-    return '192.168.1.131:5173';
+    return '192.168.68.130:5174';
   });
 
   const [activeHost, setActiveHost] = useState<string>(() => {
@@ -104,12 +118,13 @@ export const AndroidStageControllerView: React.FC = () => {
     ) {
       return window.location.origin;
     }
-    return '192.168.1.131:5173';
+    return '192.168.68.130:5174';
   });
 
   const [isConnected, setIsConnected] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgressText, setScanProgressText] = useState<string>('');
+  const [connectionNotice, setConnectionNotice] = useState<string>('');
   const [lastSyncTime, setLastSyncTime] = useState<number>(0);
   const [layoutMode, setLayoutMode] = useState<AndroidLayoutMode>('split');
   const [controllerTab, setControllerTab] = useState<
@@ -223,19 +238,21 @@ export const AndroidStageControllerView: React.FC = () => {
     let active = true;
     const poll = async () => {
       if (!activeHost) return;
-      let remoteState = await fetchRemoteStateFromHost(activeHost, 'Android-3rdMonitor-APK');
+      let remoteState = await fetchRemoteStateFromHost(activeHost, 'Android-3rdMonitor-APK', 1200);
       if (!remoteState) {
         const normalized = normalizeHostUrl(activeHost);
-        if (normalized.endsWith(':5173')) {
-          remoteState = await fetchRemoteStateFromHost(
-            normalized.replace(':5173', ':5174'),
-            'Android-3rdMonitor-APK'
-          );
-        } else if (normalized.endsWith(':5174')) {
-          remoteState = await fetchRemoteStateFromHost(
-            normalized.replace(':5174', ':5173'),
-            'Android-3rdMonitor-APK'
-          );
+        const alt = normalized.includes(':5174')
+          ? normalized.replace(':5174', ':5173')
+          : normalized.replace(':5173', ':5174');
+        const altState = await fetchRemoteStateFromHost(alt, 'Android-3rdMonitor-APK', 1000);
+        if (altState) {
+          remoteState = altState;
+          setActiveHost(alt);
+          const clean = alt.replace(/^https?:\/\//, '');
+          setHostInput(clean);
+          try {
+            localStorage.setItem(SAVED_HOST_KEY, clean);
+          } catch {}
         }
       }
       if (!active) return;
@@ -244,69 +261,119 @@ export const AndroidStageControllerView: React.FC = () => {
         setIsConnected(true);
         setLastSyncTime(Date.now());
       } else {
-        if (Date.now() - lastSyncTime > 2500) {
+        if (Date.now() - lastSyncTime > 3000) {
           setIsConnected(false);
         }
       }
     };
 
     poll();
-    const interval = window.setInterval(poll, 200);
+    const interval = window.setInterval(poll, 220);
     return () => {
       active = false;
       window.clearInterval(interval);
     };
   }, [activeHost, lastSyncTime]);
 
-  const connectToHost = (target: string) => {
+  const connectToHost = async (target: string) => {
     const cleaned = target.trim();
-    setHostInput(cleaned);
-    setActiveHost(cleaned);
+    if (!cleaned) return;
+    setConnectionNotice(`Connecting to ${cleaned}...`);
+    const norm = normalizeHostUrl(cleaned);
+    const hostDisplay = norm.replace(/^https?:\/\//, '');
+    setHostInput(hostDisplay);
+    setActiveHost(norm);
     try {
-      localStorage.setItem(SAVED_HOST_KEY, cleaned);
+      localStorage.setItem(SAVED_HOST_KEY, hostDisplay);
     } catch {}
+
+    const state = await fetchRemoteStateFromHost(norm, 'Android-3rdMonitor-APK', 1500);
+    if (state) {
+      setPayload(state);
+      setIsConnected(true);
+      setLastSyncTime(Date.now());
+      setConnectionNotice(`Connected to ${hostDisplay}`);
+      setTimeout(() => setConnectionNotice(''), 3000);
+    } else {
+      const altNorm = norm.includes(':5174')
+        ? norm.replace(':5174', ':5173')
+        : norm.includes(':5173')
+        ? norm.replace(':5173', ':5174')
+        : `${norm}:5174`;
+      const altDisplay = altNorm.replace(/^https?:\/\//, '');
+      setConnectionNotice(`Trying alternate port ${altDisplay}...`);
+      const altState = await fetchRemoteStateFromHost(altNorm, 'Android-3rdMonitor-APK', 1500);
+      if (altState) {
+        setPayload(altState);
+        setIsConnected(true);
+        setLastSyncTime(Date.now());
+        setActiveHost(altNorm);
+        setHostInput(altDisplay);
+        try {
+          localStorage.setItem(SAVED_HOST_KEY, altDisplay);
+        } catch {}
+        setConnectionNotice(`Connected to ${altDisplay}`);
+        setTimeout(() => setConnectionNotice(''), 3000);
+      } else {
+        setIsConnected(false);
+        setConnectionNotice(`Could not reach PC at ${hostDisplay}. Check Wi-Fi & Firewall.`);
+      }
+    }
   };
 
   // Auto-scan subnet for Windows PC running FreeWorship
   const handleAutoScanWifi = async () => {
     setIsScanning(true);
-    setScanProgressText('Detecting Wi-Fi...');
+    setScanProgressText('Checking Wi-Fi...');
+    setConnectionNotice('');
     try {
       const prefixSet = new Set<string>();
 
-      // 1. Check WebRTC ICE host candidates for the Android device's exact local subnet
+      // 1. Device's own Wi-Fi IP directly from Android native network interface (zero-guesswork)
+      const nativeIp = await getNativeDeviceWifiIp();
+      if (nativeIp) {
+        const nativeMatch = nativeIp.match(/^(\d+\.\d+\.\d+)\.\d+$/);
+        if (nativeMatch && nativeMatch[1]) {
+          prefixSet.add(nativeMatch[1]);
+        }
+      }
+
+      // 2. Check WebRTC ICE host candidates for the Android device's local subnet
       const rtcPrefixes = await detectLocalSubnetPrefix();
       rtcPrefixes.forEach((p) => prefixSet.add(p));
 
-      // 2. Check current hostInput prefix if user typed or saved an IP previously
+      // 3. Check current hostInput prefix if user typed or saved an IP previously
       const ipMatch = hostInput.match(/(\d+\.\d+\.\d+)\.\d+/);
       if (ipMatch && ipMatch[1]) {
         prefixSet.add(ipMatch[1]);
       }
 
-      // 3. Add common home/church router subnets (PLDT, Globe, Converge, TP-Link, Huawei, Mobile Hotspots)
+      // 4. Common Philippine & church router subnets
       [
-        '192.168.1',
-        '192.168.0',
-        '192.168.254',
-        '192.168.100',
-        '192.168.8',
-        '192.168.18',
-        '192.168.50',
+        '192.168.68', // TP-Link Deco Mesh Wi-Fi
+        '192.168.1',  // PLDT / Globe / Linksys
+        '192.168.0',  // D-Link / Netgear / TP-Link
+        '192.168.254',// PLDT Home Fibr
+        '192.168.100',// Globe At Home Fiber
+        '192.168.8',  // Huawei / Converge
+        '192.168.18', // Fiberhome / SkyFiber
+        '192.168.50', // Asus RT routers
+        '192.168.2',  // SMB routers
+        '192.168.3',
+        '192.168.43', // Android Hotspot
+        '172.20.10',  // iOS Hotspot
         '10.0.0',
-        '172.20.10',
-        '192.168.43',
+        '10.0.1',
       ].forEach((p) => prefixSet.add(p));
 
       const prefixes = Array.from(prefixSet);
 
-      const probeHost = async (ipPort: string, timeoutMs = 850): Promise<string | null> => {
+      const probeHost = async (ipPort: string, timeoutMs = 500): Promise<string | null> => {
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), timeoutMs);
         try {
           const res = await fetch(`http://${ipPort}/api/lan-info`, {
             signal: ctrl.signal,
-            cache: 'no-store',
           });
           clearTimeout(timer);
           if (res.ok) {
@@ -321,23 +388,23 @@ export const AndroidStageControllerView: React.FC = () => {
       };
 
       // Quick probe of currently entered host on both port 5174 (Windows .exe) and 5173 (Dev)
-      const cleanCurrentIp = hostInput.replace(/^https?:\/\//, '').split(':')[0];
+      const cleanCurrentIp = hostInput.replace(/^https?:\/\//, '').split(':')[0].split('/')[0];
       if (cleanCurrentIp && /^\d+\.\d+\.\d+\.\d+$/.test(cleanCurrentIp)) {
         const quickHit =
-          (await probeHost(`${cleanCurrentIp}:5174`, 600)) ||
-          (await probeHost(`${cleanCurrentIp}:5173`, 600));
+          (await probeHost(`${cleanCurrentIp}:5174`, 450)) ||
+          (await probeHost(`${cleanCurrentIp}:5173`, 450));
         if (quickHit) {
           connectToHost(quickHit);
           setIsConnected(true);
+          setScanProgressText(`Found ${quickHit}!`);
           return;
         }
       }
 
-      // Scan each subnet prefix across all 2..254 addresses on both port 5174 and 5173
+      // Scan each subnet prefix across priority octets first, then full sweep
       for (const prefix of prefixes) {
         setScanProgressText(`Scanning ${prefix}.x...`);
         const hostCandidates: string[] = [];
-        // Prioritize common DHCP ranges first, then full 2..254 sweep
         const priorityOctets: number[] = [];
         for (let i = 100; i <= 150; i++) priorityOctets.push(i);
         for (let i = 2; i < 100; i++) priorityOctets.push(i);
@@ -348,20 +415,21 @@ export const AndroidStageControllerView: React.FC = () => {
           hostCandidates.push(`${prefix}.${octet}:5173`);
         }
 
-        const batchSize = 40;
+        const batchSize = 50;
         for (let i = 0; i < hostCandidates.length; i += batchSize) {
           const batch = hostCandidates.slice(i, i + batchSize);
-          const results = await Promise.all(batch.map((hp) => probeHost(hp, 850)));
+          const results = await Promise.all(batch.map((hp) => probeHost(hp, 550)));
           const found = results.find((r) => r !== null);
           if (found) {
             connectToHost(found);
             setIsConnected(true);
-            setScanProgressText(`Connected ${found}`);
+            setScanProgressText(`Found ${found}!`);
             return;
           }
         }
       }
       setScanProgressText('No PC found');
+      setConnectionNotice('No FreeWorship PC found. Ensure both devices are on the same Wi-Fi.');
     } finally {
       setIsScanning(false);
     }
@@ -503,50 +571,67 @@ export const AndroidStageControllerView: React.FC = () => {
         </div>
 
         {/* Windows PC IP Connection Bar */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg px-2 py-1">
-            <span className="text-[10px] font-bold text-slate-500 mr-1.5">PC IP:</span>
-            <input
-              type="text"
-              value={hostInput}
-              onChange={(e) => setHostInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') connectToHost(hostInput);
-              }}
-              placeholder="192.168.1.131:5173"
-              className="bg-transparent text-xs font-mono text-amber-300 focus:outline-none w-36"
-            />
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg px-2 py-1">
+              <span className="text-[10px] font-bold text-slate-500 mr-1.5">PC IP:</span>
+              <input
+                type="text"
+                value={hostInput}
+                onChange={(e) => setHostInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') connectToHost(hostInput);
+                }}
+                placeholder="192.168.68.130:5174"
+                className="bg-transparent text-xs font-mono text-amber-300 focus:outline-none w-40"
+              />
+              <button
+                onClick={() => connectToHost(hostInput)}
+                className="px-2 py-0.5 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[10px] transition ml-1"
+              >
+                Connect
+              </button>
+            </div>
+
             <button
-              onClick={() => connectToHost(hostInput)}
-              className="px-2 py-0.5 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[10px] transition ml-1"
+              onClick={handleAutoScanWifi}
+              disabled={isScanning}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-booth-850 hover:bg-booth-800 border border-booth-700 text-slate-200 text-[11px] font-bold transition disabled:opacity-50"
+              title="Auto-discover Windows PC on Wi-Fi"
             >
-              Connect
+              <RefreshCw className={`w-3 h-3 text-emerald-400 ${isScanning ? 'animate-spin' : ''}`} />
+              {isScanning ? scanProgressText || 'Scanning Wi-Fi...' : 'Scan PC'}
             </button>
+
+            {/* App UI Color Theme Selector */}
+            <select
+              value={uiColorTheme}
+              onChange={(e) =>
+                setUiColorTheme(e.target.value as 'dark' | 'dark-gray' | 'gray' | 'light')
+              }
+              className="px-2 py-1.5 bg-booth-950 border border-booth-700 text-slate-200 text-[10px] font-bold focus:outline-none"
+            >
+              <option value="dark">Dark</option>
+              <option value="dark-gray">Dark Gray</option>
+              <option value="gray">Gray</option>
+              <option value="light">Light</option>
+            </select>
           </div>
 
-          <button
-            onClick={handleAutoScanWifi}
-            disabled={isScanning}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-booth-850 hover:bg-booth-800 border border-booth-700 text-slate-200 text-[11px] font-bold transition disabled:opacity-50"
-            title="Auto-discover Windows PC on Wi-Fi"
-          >
-            <RefreshCw className={`w-3 h-3 text-emerald-400 ${isScanning ? 'animate-spin' : ''}`} />
-            {isScanning ? scanProgressText || 'Scanning Wi-Fi...' : 'Scan PC'}
-          </button>
-
-          {/* App UI Color Theme Selector */}
-          <select
-            value={uiColorTheme}
-            onChange={(e) =>
-              setUiColorTheme(e.target.value as 'dark' | 'dark-gray' | 'gray' | 'light')
-            }
-            className="px-2 py-1.5 bg-booth-950 border border-booth-700 text-slate-200 text-[10px] font-bold focus:outline-none"
-          >
-            <option value="dark">Dark</option>
-            <option value="dark-gray">Dark Gray</option>
-            <option value="gray">Gray</option>
-            <option value="light">Light</option>
-          </select>
+          {connectionNotice && (
+            <div
+              className={`text-[11px] font-semibold px-2.5 py-1 rounded-md flex items-center gap-1.5 ${
+                isConnected
+                  ? 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-300'
+                  : connectionNotice.includes('Could not') || connectionNotice.includes('No FreeWorship')
+                  ? 'bg-red-950/80 border border-red-500/50 text-red-300'
+                  : 'bg-amber-950/80 border border-amber-500/50 text-amber-300 animate-pulse'
+              }`}
+            >
+              <span>{connectionNotice}</span>
+            </div>
+          )}
+        </div>
 
           {/* View Mode Switcher */}
           <div className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800">
@@ -590,7 +675,6 @@ export const AndroidStageControllerView: React.FC = () => {
             <Sparkles className="w-3 h-3 text-amber-400" />
             About / Updates
           </button>
-        </div>
       </header>
 
       {/* Main Content Area */}

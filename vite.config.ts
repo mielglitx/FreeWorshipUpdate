@@ -24,14 +24,15 @@ function freeworshipLanBridgePlugin(): Plugin {
     name: 'freeworship-lan-bridge',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        if (!req.url?.startsWith('/api/lan-')) {
+        if (!req.url?.startsWith('/api/lan-') && req.url !== '/ping' && req.url !== '/health') {
           return next();
         }
 
         // CORS headers so the standalone Android APK can connect from any local Wi-Fi IP
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        res.setHeader('Access-Control-Allow-Headers', '*');
+        res.setHeader('Access-Control-Max-Age', '86400');
 
         if (req.method === 'OPTIONS') {
           res.statusCode = 204;
@@ -45,6 +46,12 @@ function freeworshipLanBridgePlugin(): Plugin {
         const now = Date.now();
         for (const [ip, lastSeen] of connectedClients.entries()) {
           if (now - lastSeen > 15000) connectedClients.delete(ip);
+        }
+
+        if (req.url === '/ping' || req.url === '/health') {
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ ok: true, app: 'FreeWorship', status: 'online', port: 5173 }));
+          return;
         }
 
         if (req.url.startsWith('/api/lan-info') && req.method === 'GET') {

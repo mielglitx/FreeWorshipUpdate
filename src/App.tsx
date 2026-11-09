@@ -44,6 +44,7 @@ import {
   Image as ImageIcon,
   FolderOpen,
   Save,
+  Smartphone,
 } from 'lucide-react';
 import {
   BIBLE_DATABASE,
@@ -106,6 +107,7 @@ import { AudioPadDeck } from './components/AudioPadDeck';
 import { ThemeDesignerModal } from './components/ThemeDesignerModal';
 import { DisplaySettingsModal } from './components/DisplaySettingsModal';
 import { ImportExportModal } from './components/ImportExportModal';
+import { LanRemoteModal } from './components/LanRemoteModal';
 import {
   ConfirmDeleteModal,
   markDailyWelcomeShown,
@@ -363,6 +365,26 @@ const OperatorConsole: React.FC = () => {
   // Keyboard Shortcuts Help Popover & Import/Export Data Studio Modal
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [importExportModalOpen, setImportExportModalOpen] = useState(false);
+  const [lanRemoteModalOpen, setLanRemoteModalOpen] = useState(false);
+  const [headerLanIp, setHeaderLanIp] = useState<string>('');
+  const [headerConnectedClients, setHeaderConnectedClients] = useState<number>(0);
+
+  // Poll Local LAN Server status for operator header display
+  useEffect(() => {
+    const updateLanStatus = async () => {
+      try {
+        const info = await fetchLocalLanServerInfo();
+        const valid = info.ips.filter((i) => i !== '127.0.0.1' && !i.includes('x'));
+        if (valid.length > 0) {
+          setHeaderLanIp(`${valid[0]}:${info.port}`);
+        }
+        setHeaderConnectedClients(info.connectedClients || 0);
+      } catch {}
+    };
+    updateLanStatus();
+    const timer = window.setInterval(updateLanStatus, 4000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // Startup Splash Screen & Daily Welcome / About / GCash Donation Modal State
   const [splashProgress, setSplashProgress] = useState<number>(18);
@@ -2853,6 +2875,26 @@ const OperatorConsole: React.FC = () => {
           </button>
 
           <button
+            onClick={() => setLanRemoteModalOpen(true)}
+            className="px-3 py-2 rounded-xl bg-booth-850 hover:bg-booth-800 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center gap-1.5 transition shadow"
+            title="Android 3rd Monitor & Remote Controller Wi-Fi Connection Details"
+          >
+            <Smartphone className="w-4 h-4 text-amber-400" />
+            <span>Android Remote</span>
+            {headerLanIp && (
+              <span className="font-mono text-[10px] text-slate-400 hidden xl:inline">
+                ({headerLanIp})
+              </span>
+            )}
+            {headerConnectedClients > 0 && (
+              <span
+                className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"
+                title={`${headerConnectedClients} Android device(s) connected`}
+              />
+            )}
+          </button>
+
+          <button
             onClick={() => openExternalDisplayWindow('stream', routingSettings)}
             className="px-3 py-2 rounded-xl bg-booth-800 hover:bg-booth-700 text-sky-300 border border-sky-500/40 font-bold text-xs flex items-center gap-1.5 transition"
             title="Open Transparent Lower-Thirds Overlay for OBS / vMix / NDI"
@@ -4689,6 +4731,13 @@ const OperatorConsole: React.FC = () => {
             });
           }}
           onClose={() => setImportExportModalOpen(false)}
+        />
+      )}
+
+      {lanRemoteModalOpen && (
+        <LanRemoteModal
+          isOpen={lanRemoteModalOpen}
+          onClose={() => setLanRemoteModalOpen(false)}
         />
       )}
 

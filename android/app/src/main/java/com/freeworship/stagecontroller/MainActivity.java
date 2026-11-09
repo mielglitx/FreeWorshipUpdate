@@ -1,6 +1,7 @@
 package com.freeworship.stagecontroller;
 
 import android.os.Bundle;
+import android.webkit.WebSettings;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
@@ -8,5 +9,16 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(ApkUpdaterPlugin.class);
         super.onCreate(savedInstanceState);
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        if (this.bridge != null && this.bridge.getWebView() != null) {
+            WebSettings settings = this.bridge.getWebView().getSettings();
+            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+            settings.setAllowContentAccess(true);
+            settings.setAllowFileAccess(true);
+        }
     }
 }

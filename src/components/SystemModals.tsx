@@ -17,7 +17,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 
-export const APP_VERSION = '1.1.6';
+export const APP_VERSION = '1.1.7';
 export const APP_RELEASE_DATE = 'November 9, 2026';
 export const GITHUB_UPDATE_REPO = 'https://github.com/mielglitx/FreeWorshipUpdate';
 export const GITHUB_RELEASES_API =
@@ -25,7 +25,7 @@ export const GITHUB_RELEASES_API =
 export const GITHUB_RAW_UPDATES_URL =
   'https://raw.githubusercontent.com/mielglitx/FreeWorshipUpdate/main/updates.json';
 export const GITHUB_RAW_APK_URL =
-  'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.6/FreeWorship-StageController.apk';
+  'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.7/FreeWorship-StageController.apk';
 
 /**
  * Semver comparison: returns true ONLY if remoteVersion is strictly greater than currentVersion.
@@ -57,6 +57,18 @@ export interface ChangelogItem {
 }
 
 export const APP_CHANGELOG: ChangelogItem[] = [
+  {
+    version: '1.1.7',
+    date: 'November 9, 2026',
+    platform: 'Windows & Android',
+    title: 'Bulletproof Android ↔ Windows LAN Sync, Auto-Discovery & Cleartext Network Security',
+    highlights: [
+      'Android Cleartext Traffic & Security Config: Added explicit Android network security configuration (allowing cleartext HTTP traffic across local subnets) and WebView Mixed Content Mode to resolve Android 9+ silent connection blocking.',
+      'Expanded Auto-Discovery & Native Wi-Fi Detection: Android app now uses a native network plugin to identify its exact Wi-Fi IP and subnet prefix (including TP-Link Deco 192.168.68.x, PLDT 192.168.254.x/1.x, Globe 192.168.100.x, and hotspots), scanning both ports 5174 and 5173 concurrently in under 2 seconds.',
+      'Dual-Port Windows Host & Resilient URL Parsing: Windows LAN server now listens simultaneously on port 5174 and alias port 5173 with universal CORS headers (*). Manual IP entry now automatically normalizes raw IPs, full URLs, and port omissions.',
+      'Operator LAN Remote Bar & Firewall Helper: Added a dedicated "Android Remote" button in the Windows top header displaying the active Wi-Fi IP (e.g. 192.168.68.130:5174) with 1-click copy, connection diagnostics, and an automatic Windows Firewall rule installer.',
+    ],
+  },
   {
     version: '1.1.6',
     date: 'November 9, 2026',

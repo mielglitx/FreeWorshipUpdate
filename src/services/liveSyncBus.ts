@@ -95,6 +95,7 @@ declare global {
       loadUserSongs?: () => Promise<{ ok: boolean; data?: string | null; error?: string }>;
       loadBuiltInBibleFile?: (fileName: string) => Promise<string | null>;
       downloadAndInstallUpdate?: (url: string) => Promise<{ ok: boolean; error?: string }>;
+      setupFirewallRule?: () => Promise<{ ok: boolean; code?: number; error?: string }>;
       onUpdateDownloadProgress?: (callback: (progress: { percent: number; bytesReceived: number; totalBytes: number; stage?: string }) => void) => () => void;
     };
   }
@@ -268,50 +269,75 @@ export function subscribeRemoteCommands(
 }
 
 export function normalizeHostUrl(input: string): string {
-  const trimmed = input.trim().replace(/\/+$/, '');
+  if (!input) return '';
+  let trimmed = input.trim().replace(/\/+$/, '');
   if (!trimmed) return '';
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-    return trimmed;
+
+  // Strip http:// or https:// prefix first
+  trimmed = trimmed.replace(/^https?:\/\//i, '');
+
+  // Strip any trailing path (e.g. /api/lan-sync or /)
+  const slashIdx = trimmed.indexOf('/');
+  if (slashIdx !== -1) {
+    trimmed = trimmed.substring(0, slashIdx);
   }
+
+  trimmed = trimmed.trim();
+  if (!trimmed) return '';
+
+  // If already contains a port, e.g. "192.168.68.130:5174"
   if (trimmed.includes(':')) {
     return `http://${trimmed}`;
   }
+
+  // Default to port 5174 (Production LAN server)
   return `http://${trimmed}:5174`;
 }
 
 export async function sendRemoteCommandToHost(
   hostBaseUrl: string,
-  command: RemoteControlAction
+  command: RemoteControlAction,
+  timeoutMs = 1500
 ): Promise<boolean> {
   const base = normalizeHostUrl(hostBaseUrl);
   if (!base) return false;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(`${base}/api/lan-sync`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'REMOTE_COMMAND', command }),
+      signal: ctrl.signal,
     });
+    clearTimeout(timer);
     return res.ok;
   } catch {
+    clearTimeout(timer);
     return false;
   }
 }
 
 export async function fetchRemoteStateFromHost(
   hostBaseUrl: string,
-  deviceName = 'Android-3rd-Monitor'
+  deviceName = 'Android-3rd-Monitor',
+  timeoutMs = 1500
 ): Promise<LiveBroadcastPayload | null> {
   const base = normalizeHostUrl(hostBaseUrl);
   if (!base) return null;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(
       `${base}/api/lan-sync?role=client&device=${encodeURIComponent(deviceName)}`,
-      { cache: 'no-store' }
+      { signal: ctrl.signal }
     );
+    clearTimeout(timer);
     if (!res.ok) return null;
     const data = await res.json();
     return ((data.payload || data.state) as LiveBroadcastPayload) || null;
   } catch {
+    clearTimeout(timer);
     return null;
   }
 }
