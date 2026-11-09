@@ -170,13 +170,13 @@ async function main() {
   const existingAssets = release.assets || [];
   const filesToUpload = [
     {
-      filePath: path.resolve(__dirname, '../release/FreeWorship Studio-Setup-1.1.4.exe'),
-      name: 'FreeWorship.Studio-Setup-1.1.4.exe',
+      filePath: path.resolve(__dirname, '../release/FreeWorship Studio-Setup-1.1.5.exe'),
+      name: 'FreeWorship.Studio-Setup-1.1.5.exe',
       contentType: 'application/vnd.microsoft.portable-executable',
     },
     {
-      filePath: path.resolve(__dirname, '../release/FreeWorship Studio-Portable-1.1.4.exe'),
-      name: 'FreeWorship.Studio-Portable-1.1.4.exe',
+      filePath: path.resolve(__dirname, '../release/FreeWorship Studio-Portable-1.1.5.exe'),
+      name: 'FreeWorship.Studio-Portable-1.1.5.exe',
       contentType: 'application/vnd.microsoft.portable-executable',
     },
     {
