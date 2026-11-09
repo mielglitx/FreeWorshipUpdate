@@ -4,6 +4,22 @@ All notable changes to the **FreeWorship Studio** (Windows Desktop Presentation 
 
 ---
 
+## [1.1.5] — November 9, 2026
+
+### 🚀 Highlights & Major Features
+- **100% Pre-bundled Offline Bibles (Zero Internet Required)**:
+  - All 5 sanctuary standard translations (**KJV**, **NIV**, **NASB**, **ESV**, and **MBB 1901**) are now completely built-in and packaged directly with the application on both Windows Desktop and Android.
+  - Eliminated any need to download Bibles over the internet or CDN.
+  - All ~155,453 verses across all 330 books load from local storage/assets in milliseconds.
+- **Full 66-Book Magandang Balita Bibliya (MBB 1901) Fix**:
+  - Resolved missing verses by establishing strict canonical 1-to-1 mapping for all 66 Tagalog book names (*Genesis* through *Pahayag*), allowing instant filtering, chapter navigation, and full-text search.
+- **Enhanced Bible Import Parser**:
+  - Expanded natural language Tagalog and Spanish book aliases across all 66 books, ensuring any imported external JSON or Zefania/OpenSong XML files map correctly.
+- **Sanctuary Offline Indicator**:
+  - Cleaned up Bible management header to display a permanent green **Built-in Offline** status badge.
+
+---
+
 ## [1.1.4] — November 9, 2026
 
 ### 🚀 Highlights & Major Features

@@ -666,6 +666,30 @@ app.whenReady().then(() => {
     }
   });
 
+  // Offline Built-in 66-Book Bible Loader (Fast direct disk read)
+  ipcMain.handle('freeworship:load-bible-file', async (_event, fileName) => {
+    try {
+      const safeName = path.basename(fileName);
+      const candidatePaths = [
+        path.join(__dirname, '../dist/bibles', safeName),
+        path.join(__dirname, '../public/bibles', safeName),
+        path.join(app.getAppPath(), 'dist/bibles', safeName),
+        path.join(app.getAppPath(), 'public/bibles', safeName),
+        path.join(process.resourcesPath, 'app/dist/bibles', safeName),
+        path.join(process.resourcesPath, 'dist/bibles', safeName),
+      ];
+      for (const p of candidatePaths) {
+        if (fs.existsSync(p)) {
+          return await fs.promises.readFile(p, 'utf8');
+        }
+      }
+      console.warn('Bible file not found in candidate paths:', safeName);
+    } catch (err) {
+      console.error('Failed to load local bible file via IPC:', err);
+    }
+    return null;
+  });
+
   screen.on('display-added', notifyWindowStatus);
   screen.on('display-removed', notifyWindowStatus);
   screen.on('display-metrics-changed', notifyWindowStatus);

@@ -83,6 +83,7 @@ import {
   BuiltInBibleEdition,
   fetchAndInstallPublicDomainBible,
   loadAllBiblesFromIndexedDB,
+  loadBuiltInBible,
   parseBibleFile,
   parseScriptureReference,
   saveBibleToIndexedDB,
@@ -427,15 +428,31 @@ const OperatorConsole: React.FC = () => {
     }, 220);
 
     loadAllBiblesFromIndexedDB()
-      .then((loaded) => {
+      .then(async (loaded) => {
         if (!mounted) return;
         const filteredLoaded: Record<string, BibleVerse[]> = {};
         Object.entries(loaded).forEach(([k, v]) => {
-          if (k.toUpperCase() !== 'WEB') {
+          if (k.toUpperCase() !== 'WEB' && Array.isArray(v) && v.length > 0) {
             filteredLoaded[k] = v;
           }
         });
-        if (Object.keys(filteredLoaded).length > 0) {
+
+        // Preload built-in translations if missing or incomplete
+        const builtInCodes = ['KJV', 'NIV', 'NASB', 'ESV', 'MBB 1901'];
+        for (const code of builtInCodes) {
+          if (!filteredLoaded[code] || filteredLoaded[code].length < 20000) {
+            try {
+              const builtInVerses = await loadBuiltInBible(code);
+              if (builtInVerses.length > 0) {
+                filteredLoaded[code] = builtInVerses;
+              }
+            } catch (err) {
+              console.warn(`Failed preloading built-in ${code}:`, err);
+            }
+          }
+        }
+
+        if (Object.keys(filteredLoaded).length > 0 && mounted) {
           setCustomBibles(filteredLoaded);
         }
         setSplashProgress(90);
@@ -1311,8 +1328,19 @@ const OperatorConsole: React.FC = () => {
   useEffect(() => {
     if (selectedTranslation === 'WEB') {
       setSelectedTranslation('KJV');
+      return;
     }
-  }, [selectedTranslation]);
+    if (
+      ['KJV', 'NIV', 'NASB', 'ESV', 'MBB 1901'].includes(selectedTranslation) &&
+      (!customBibles[selectedTranslation] || customBibles[selectedTranslation].length < 20000)
+    ) {
+      loadBuiltInBible(selectedTranslation).then((verses) => {
+        if (verses && verses.length > 0) {
+          setCustomBibles((prev) => ({ ...prev, [selectedTranslation]: verses }));
+        }
+      });
+    }
+  }, [selectedTranslation, customBibles]);
 
   const activeTranslationVerses: BibleVerse[] = useMemo(() => {
     const customList = customBibles[selectedTranslation];
@@ -3135,34 +3163,13 @@ const OperatorConsole: React.FC = () => {
                     <span className="truncate">Export {selectedTranslation}</span>
                   </button>
 
-                  {(() => {
-                    const editionMap: Record<string, BuiltInBibleEdition> = {
-                      KJV: 'en_kjv',
-                      NIV: 'en_niv',
-                      NASB: 'en_nasb',
-                      ESV: 'en_esv',
-                      'MBB 1901': 'tl_abtag',
-                    };
-                    const targetEdition = editionMap[selectedTranslation] || 'en_kjv';
-                    const isInstalled = (customBibles[selectedTranslation]?.length || 0) > 2000;
-                    return (
-                      <button
-                        onClick={() => handleInstallFullPublicBible(targetEdition)}
-                        disabled={isDownloadingBible}
-                        className="py-1.5 px-2 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-[10px] font-bold text-emerald-300 flex items-center justify-center gap-1 disabled:opacity-50"
-                        title={`Download & cache complete 66 books of ${selectedTranslation} into offline IndexedDB`}
-                      >
-                        <Download className="w-3.5 h-3.5 shrink-0" />
-                        <span className="truncate">
-                          {isDownloadingBible
-                            ? 'Installing...'
-                            : isInstalled
-                            ? `Full 66 ${selectedTranslation} ✓`
-                            : `Full 66 ${selectedTranslation}`}
-                        </span>
-                      </button>
-                    );
-                  })()}
+                  <div
+                    className="py-1.5 px-2 rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-[10px] font-bold text-emerald-300 flex items-center justify-center gap-1.5 shadow-sm select-none"
+                    title={`${selectedTranslation} is 100% pre-bundled offline with all 66 books (${activeTranslationVerses.length.toLocaleString()} verses)`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                    <span className="truncate">Built-in Offline</span>
+                  </div>
                 </div>
 
                 {bibleImportStatus && (

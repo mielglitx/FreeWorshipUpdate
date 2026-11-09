@@ -28,22 +28,21 @@ if (!token) {
 
 const REPO_OWNER = 'mielglitx';
 const REPO_NAME = 'FreeWorshipUpdate';
-const TAG_NAME = 'v1.1.4';
-const RELEASE_TITLE = 'FreeWorship v1.1.4 - Side-by-Side Dual View, Ad-hoc Live Projection, Custom Logo Upload & Media Defaults';
+const TAG_NAME = 'v1.1.5';
+const RELEASE_TITLE = 'FreeWorship v1.1.5 - 100% Built-in Offline 66-Book Bibles (KJV, NIV, NASB, ESV, MBB 1901) & Zero Internet Requirement';
 
-const RELEASE_BODY = `## FreeWorship v1.1.4 Update
+const RELEASE_BODY = `## FreeWorship v1.1.5 Update
 
 ### 🚀 Highlights & Major Features
-- **Ad-hoc Live Projection on Double Click**: Double-clicking any song in the library or any Bible verse immediately projects it to the Live View and Sanctuary display output without altering or adding it to the service schedule.
-- **Side-by-Side Dual View (Preview & Live)**: Center panel layout switcher featuring **[🔴 Live View]**, **[👁️ Preview]**, and **[◫ Side-by-Side]**. Side-by-side mode divides the workspace into a dual-deck layout with the Preview Deck on the left and Live Deck on the right.
-- **Instant Live Projection on Preview Slide Click**: Clicking any slide in the preview deck immediately loads that song's full slides to Live and focuses directly on the selected slide with ON AIR status.
-- **Media Background Defaults for Songs & Bible**: Right-clicking any media item provides dedicated options to use as default background for songs, for Bible verses, or both.
-- **Custom Ministry / Church Logo Upload in Themes**: Themes tab now includes a custom logo file upload (PNG, JPG, SVG, WEBP with transparency support) with real-time thumbnail preview, Change and Remove buttons, active during sanctuary blackout / [L] splash screen.
+- **100% Pre-bundled Offline Bibles (Zero Internet Required)**: All 5 sanctuary standard translations (**KJV**, **NIV**, **NASB**, **ESV**, and **MBB 1901**) are now completely built-in and packaged directly with the application on both Windows Desktop and Android. Eliminated any need to download Bibles over the internet or CDN.
+- **Full 66-Book Magandang Balita Bibliya (MBB 1901) Fix**: Resolved missing verses by establishing strict canonical 1-to-1 mapping for all 66 Tagalog book names (*Genesis* through *Pahayag*), allowing instant filtering, chapter navigation, and full-text search.
+- **Enhanced Bible Import Parser**: Expanded natural language Tagalog and Spanish book aliases across all 66 books, ensuring any imported external JSON or Zefania/OpenSong XML files map correctly.
+- **Sanctuary Offline Indicator**: Cleaned up Bible management header to display a permanent green **Built-in Offline** status badge.
 
 ### 📥 Direct Downloads
-- **Windows Setup Installer**: [FreeWorship Studio-Setup-1.1.4.exe](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.4/FreeWorship.Studio-Setup-1.1.4.exe)
-- **Windows Portable**: [FreeWorship Studio-Portable-1.1.4.exe](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.4/FreeWorship.Studio-Portable-1.1.4.exe)
-- **Android Remote APK**: [FreeWorship-StageController.apk](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.4/FreeWorship-StageController.apk)
+- **Windows Setup Installer**: [FreeWorship Studio-Setup-1.1.5.exe](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.5/FreeWorship.Studio-Setup-1.1.5.exe)
+- **Windows Portable**: [FreeWorship Studio-Portable-1.1.5.exe](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.5/FreeWorship.Studio-Portable-1.1.5.exe)
+- **Android Remote APK**: [FreeWorship-StageController.apk](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.5/FreeWorship-StageController.apk)
 `;
 
 function request(options, data) {

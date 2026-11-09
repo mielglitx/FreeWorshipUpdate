@@ -1,27 +1,43 @@
 {
-  "version": "1.1.4",
+  "version": "1.1.5",
   "releaseDate": "November 9, 2026",
   "author": "Amiel Yalung",
   "repository": "https://github.com/mielglitx/FreeWorshipUpdate",
   "windows": {
-    "version": "1.1.4",
+    "version": "1.1.5",
     "releaseDate": "November 9, 2026",
     "appName": "FreeWorship Studio (Windows)",
-    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.4/FreeWorship.Studio-Setup-1.1.4.exe",
+    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.5/FreeWorship.Studio-Setup-1.1.5.exe",
     "portableUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases",
-    "fileName": "FreeWorship Studio-Setup-1.1.4.exe",
-    "notes": "v1.1.4 update: Side-by-side Preview & Live view, ad-hoc double-click live projection without scheduling, instant live projection on preview slide click, media default backgrounds for songs & scriptures, and custom church logo upload in themes."
+    "fileName": "FreeWorship Studio-Setup-1.1.5.exe",
+    "notes": "v1.1.5 update: 100% Built-in Offline 66-Book Bibles (KJV, NIV, NASB, ESV, and MBB 1901) pre-bundled into app with zero downloads and zero internet required, complete MBB 1901 verse resolution, and offline stability fixes."
   },
   "android": {
-    "version": "1.1.4",
+    "version": "1.1.5",
     "releaseDate": "November 9, 2026",
     "appName": "FreeWorship Android Remote & 3rd Monitor",
-    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.4/FreeWorship-StageController.apk",
+    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.5/FreeWorship-StageController.apk",
     "fallbackDownloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/raw/main/FreeWorship-StageController.apk",
     "fileName": "FreeWorship-StageController.apk",
-    "notes": "v1.1.4 update: Side-by-side view support, double-click direct projection, and custom logo display."
+    "notes": "v1.1.5 update: Complete offline built-in 66-book Bibles included directly in Android assets, instant scripture retrieval, and full MBB 1901 verse support."
   },
   "changelog": [
+    {
+      "version": "1.1.5",
+      "date": "November 9, 2026",
+      "platform": "Windows & Android",
+      "title": "100% Built-in Offline Bibles (KJV, NIV, NASB, ESV, MBB 1901) & Zero Internet Requirement",
+      "highlights": [
+        "100% Pre-bundled Offline Bibles: All 5 sanctuary standard translations (KJV, NIV, NASB, ESV, and MBB 1901) are now pre-bundled into both Windows Desktop and Android apps—zero downloads, zero internet connection required.",
+        "Full 66-Book Magandang Balita Bibliya (MBB 1901): Fixed missing verses issue by accurately mapping all 66 Tagalog books (Genesis to Pahayag) to canonical scripture selectors.",
+        "Zero-Latency Sanctuary Mode: Swapped remote CDN downloads with instant local disk & asset loading (<30ms).",
+        "Persistent User Songs on App Update: User-created hymns and custom songs are preserved in persistent disk storage across updates and uninstalls.",
+        "Alphabetical Song Library Sorting: Songs are now automatically sorted alphabetically by title with sticky fast jump markers.",
+        "Side-by-Side Live & Preview Inspection: Preview and Live output panes can now be arranged side-by-side or stacked for seamless verse selection.",
+        "Media Background Assignment: Right-click any media item to instantly set it as live song or scripture background.",
+        "Custom Sanctuary Logo Branding: Direct logo file upload in Themes to brand projector screens with church logos."
+      ]
+    },
     {
       "version": "1.1.4",
       "date": "November 9, 2026",

@@ -17,7 +17,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 
-export const APP_VERSION = '1.1.4';
+export const APP_VERSION = '1.1.5';
 export const APP_RELEASE_DATE = 'November 9, 2026';
 export const GITHUB_UPDATE_REPO = 'https://github.com/mielglitx/FreeWorshipUpdate';
 export const GITHUB_RELEASES_API =
@@ -25,7 +25,7 @@ export const GITHUB_RELEASES_API =
 export const GITHUB_RAW_UPDATES_URL =
   'https://raw.githubusercontent.com/mielglitx/FreeWorshipUpdate/main/updates.json';
 export const GITHUB_RAW_APK_URL =
-  'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.4/FreeWorship-StageController.apk';
+  'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.5/FreeWorship-StageController.apk';
 
 /**
  * Semver comparison: returns true ONLY if remoteVersion is strictly greater than currentVersion.
@@ -57,6 +57,48 @@ export interface ChangelogItem {
 }
 
 export const APP_CHANGELOG: ChangelogItem[] = [
+  {
+    version: '1.1.5',
+    date: 'November 9, 2026',
+    platform: 'Windows & Android',
+    title: '100% Built-in Offline Bibles (KJV, NIV, NASB, ESV, MBB 1901) & Zero Internet Requirement',
+    highlights: [
+      '100% Pre-bundled Offline Bibles: All 5 translations (KJV, NIV, NASB, ESV, and MBB 1901) are now pre-bundled into both Windows Desktop and Android apps—zero downloads, zero internet connection required.',
+      'Full 66-Book Magandang Balita Bibliya (MBB 1901): Fixed missing verses issue by accurately mapping all 66 Tagalog books (Genesis to Pahayag) to canonical scripture selectors.',
+      'Zero-Latency Sanctuary Mode: Swapped remote CDN downloads with instant local disk & asset loading (<30ms).',
+      'Persistent User Songs on App Update: User-created hymns and custom songs are preserved in persistent disk storage across updates and uninstalls.',
+      'Alphabetical Song Library Sorting: Songs are now automatically sorted alphabetically by title with sticky fast jump markers.',
+      'Side-by-Side Live & Preview Inspection: Preview and Live output panes can now be arranged side-by-side or stacked for seamless verse selection.',
+      'Media Background Assignment: Right-click any media item to instantly set it as live song or scripture background.',
+      'Custom Sanctuary Logo Branding: Direct logo file upload in Themes to brand projector screens with church logos.',
+    ],
+  },
+  {
+    version: '1.1.4',
+    date: 'November 9, 2026',
+    platform: 'Windows & Android',
+    title: 'Side-by-Side Dual View, Ad-hoc Live Projection on Double Click, Preview Slide Live Push, Media Default Backgrounds & Custom Logo Upload',
+    highlights: [
+      'Ad-hoc Live Projection on Double Click: Double-clicking any song in the library or any Bible verse immediately projects it to the Live View and Sanctuary display without automatically adding it to the service schedule.',
+      'Side-by-Side Dual View: Center panel layout switcher featuring [🔴 Live View], [👁️ Preview], and [◫ Side-by-Side]. Side-by-side mode divides the workspace into a dual-deck layout with Preview Deck on the left and Live Deck on the right.',
+      'Instant Live Projection on Preview Slide Click: Clicking any slide in the preview deck immediately loads that song\'s full slides to Live and focuses directly on the selected slide with ON AIR status.',
+      'Media Background Defaults for Songs & Bible: Right-clicking any media item gives dedicated options to use as background for songs, for Bible verses, or both.',
+      'Custom Church Logo Upload: Themes tab now includes a custom logo file upload (PNG, JPG, SVG, WEBP with transparency support) with real-time thumbnail preview, Change and Remove buttons, active during sanctuary blackout / [L] splash screen.',
+    ],
+  },
+  {
+    version: '1.1.3',
+    date: 'November 9, 2026',
+    platform: 'Windows & Android',
+    title: 'Dedicated Song Preview Workspace, Grid & List View Toggle, Alphabetical Song Sorting, Triple-Layer User Song Retention & 20 Classic Hymns',
+    highlights: [
+      'Dedicated Song Preview Workspace: Added a Center Panel tab switcher (\'Live Service\' vs \'Song Preview\') allowing operators to preview any selected song, inspect verses, jump through sections, and review chords without altering live sanctuary output.',
+      'Grid vs List View Switcher: Added \'View: Grid | List\' mode toggle for both Live Service and Song Preview slide decks. List View presents full-width stacked rows with verse tags, status badges, lyrics lines, chords, and direct 1-click \'Go Live\' buttons for rapid verse selection during worship.',
+      'Triple-Layer User Song Retention: Built seamless persistence saving user-created and edited songs across LocalStorage, IndexedDB, and persistent Electron disk storage (%APPDATA%\\freeworship\\user_library_songs.json), ensuring 100% data retention across all app updates.',
+      'Alphabetical Song Library Sorting: The songs library catalog is now automatically sorted from A to Z by title.',
+      '20 Classic Hymns Added: Seeded complete lyrics, verses, choruses, and chord progressions for 20 beloved hymns.',
+    ],
+  },
   {
     version: '1.1.2',
     date: 'November 9, 2026',
@@ -385,7 +427,7 @@ export const WelcomeAboutModal: React.FC<WelcomeAboutModalProps> = ({
 
   const handleDownloadAndInstallUpdate = async () => {
     const defaultWinUrl =
-      'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.2/FreeWorship.Studio-Setup-1.1.2.exe';
+      'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.5/FreeWorship.Studio-Setup-1.1.5.exe';
     const targetUrl =
       updateStatus.downloadUrl || (isAndroid ? GITHUB_RAW_APK_URL : defaultWinUrl);
 

@@ -91,6 +91,9 @@ declare global {
       onStateSync: (callback: (payload: LiveBroadcastPayload) => void) => () => void;
       onRemoteCommand?: (callback: (command: RemoteControlAction) => void) => () => void;
       onWindowStatus: (callback: (status: any) => void) => () => void;
+      saveUserSongs?: (songsJson: string) => Promise<{ ok: boolean; error?: string }>;
+      loadUserSongs?: () => Promise<{ ok: boolean; data?: string | null; error?: string }>;
+      loadBuiltInBibleFile?: (fileName: string) => Promise<string | null>;
       downloadAndInstallUpdate?: (url: string) => Promise<{ ok: boolean; error?: string }>;
       onUpdateDownloadProgress?: (callback: (progress: { percent: number; bytesReceived: number; totalBytes: number; stage?: string }) => void) => () => void;
     };
