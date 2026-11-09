@@ -25,7 +25,7 @@ export const GITHUB_RELEASES_API =
 export const GITHUB_RAW_UPDATES_URL =
   'https://raw.githubusercontent.com/mielglitx/FreeWorshipUpdate/main/updates.json';
 export const GITHUB_RAW_APK_URL =
-  'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.2/FreeWorship-StageController.apk';
+  'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.3/FreeWorship-StageController.apk';
 
 /**
  * Semver comparison: returns true ONLY if remoteVersion is strictly greater than currentVersion.
@@ -750,7 +750,7 @@ export const WelcomeAboutModal: React.FC<WelcomeAboutModalProps> = ({
                         updateStatus.downloadUrl ||
                         (isAndroid
                           ? GITHUB_RAW_APK_URL
-                          : 'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.1/FreeWorship.Studio-Setup-1.1.1.exe')
+                          : 'https://github.com/mielglitx/FreeWorshipUpdate/releases/latest')
                       }
                       target="_blank"
                       rel="noreferrer"
