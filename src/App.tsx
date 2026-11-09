@@ -40,6 +40,8 @@ import {
   List,
   Eye,
   PlayCircle,
+  Columns,
+  Image as ImageIcon,
 } from 'lucide-react';
 import {
   BIBLE_DATABASE,
@@ -166,6 +168,9 @@ const STORAGE_KEYS = {
   THEMES: 'freeworship_themes_v1',
   DEFAULT_LOGO_ID: 'freeworship_default_logo_id_v1',
   UI_COLOR_THEME: 'freeworship_ui_color_theme_v1',
+  DEFAULT_SONG_BG_ID: 'freeworship_default_song_bg_id_v1',
+  DEFAULT_SCRIPTURE_BG_ID: 'freeworship_default_scripture_bg_id_v1',
+  CENTER_LAYOUT_MODE: 'freeworship_center_layout_mode_v1',
 };
 
 type UiColorTheme = 'dark' | 'dark-gray' | 'gray' | 'light';
@@ -206,10 +211,63 @@ const OperatorConsole: React.FC = () => {
   );
   const [audioTracks, setAudioTracks] = useState<AudioTrackItem[]>([]);
 
-  // Center Panel Workspace Mode: 'live' (active schedule item) vs 'preview' (currently selected song)
-  const [centerTab, setCenterTab] = useState<'live' | 'preview'>('live');
+  // Ad-hoc Direct Live Presentation (Projects directly to screens without modifying the Schedule)
+  const [liveAdhocItem, setLiveAdhocItem] = useState<ScheduleItem | null>(null);
+
+  // Center Panel Workspace Layout: 'live' (Live Only) | 'preview' (Preview Only) | 'side-by-side' (Side-by-Side Dual View)
+  const [centerLayoutMode, setCenterLayoutMode] = useState<'live' | 'preview' | 'side-by-side'>(() => {
+    try {
+      return (
+        (localStorage.getItem(STORAGE_KEYS.CENTER_LAYOUT_MODE) as
+          | 'live'
+          | 'preview'
+          | 'side-by-side') || 'side-by-side'
+      );
+    } catch {
+      return 'side-by-side';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.CENTER_LAYOUT_MODE, centerLayoutMode);
+    } catch {}
+  }, [centerLayoutMode]);
+
   const [previewSongId, setPreviewSongId] = useState<string | null>(null);
   const [previewSlideIndex, setPreviewSlideIndex] = useState<number>(0);
+
+  // Default Backgrounds for Songs & Bible Verses
+  const [defaultSongBackgroundId, setDefaultSongBackgroundId] = useState<string>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEYS.DEFAULT_SONG_BG_ID) || '';
+    } catch {
+      return '';
+    }
+  });
+
+  const [defaultScriptureBackgroundId, setDefaultScriptureBackgroundId] = useState<string>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEYS.DEFAULT_SCRIPTURE_BG_ID) || '';
+    } catch {
+      return '';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.DEFAULT_SONG_BG_ID, defaultSongBackgroundId);
+    } catch {}
+  }, [defaultSongBackgroundId]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.DEFAULT_SCRIPTURE_BG_ID, defaultScriptureBackgroundId);
+    } catch {}
+  }, [defaultScriptureBackgroundId]);
+
+  // Custom Sanctuary Logo Upload File Input Ref
+  const customLogoInputRef = useRef<HTMLInputElement | null>(null);
 
   // Slide Deck Display View Mode: 'grid' (cards) vs 'list' (stacked rows for fast verse selection)
   const [slideDeckViewMode, setSlideDeckViewMode] = useState<'grid' | 'list'>(() => {
@@ -478,10 +536,12 @@ const OperatorConsole: React.FC = () => {
   }, [themes]);
 
   // Derived active item, slide, next slide, background, and theme
-  const activeItem = useMemo(
-    () => schedule.find((item) => item.id === activeItemId) || schedule[0],
-    [schedule, activeItemId]
-  );
+  const activeItem = useMemo(() => {
+    if (liveAdhocItem && activeItemId === liveAdhocItem.id) {
+      return liveAdhocItem;
+    }
+    return schedule.find((item) => item.id === activeItemId) || liveAdhocItem || schedule[0];
+  }, [schedule, activeItemId, liveAdhocItem]);
 
   const activeSongKey = useMemo(() => {
     if (!activeItem) return undefined;
@@ -512,9 +572,13 @@ const OperatorConsole: React.FC = () => {
   }, [activeItem, activeSlideIndex, schedule]);
 
   const activeBackground: MediaAsset = useMemo(() => {
-    const overrideId = currentSlide?.backgroundOverrideId || activeItem?.backgroundId;
+    const overrideId =
+      currentSlide?.backgroundOverrideId ||
+      activeItem?.backgroundId ||
+      (activeItem?.type === 'song' ? defaultSongBackgroundId : '') ||
+      (activeItem?.type === 'scripture' ? defaultScriptureBackgroundId : '');
     return mediaPool.find((m) => m.id === overrideId) || mediaPool[0];
-  }, [currentSlide, activeItem, mediaPool]);
+  }, [currentSlide, activeItem, mediaPool, defaultSongBackgroundId, defaultScriptureBackgroundId]);
 
   const activeLogoAsset: MediaAsset | null = useMemo(() => {
     if (!defaultLogoMediaId) return null;
@@ -691,18 +755,103 @@ const OperatorConsole: React.FC = () => {
     setPreviewSlideIndex((p) => Math.max(0, p - 1));
   };
 
-  const goLiveWithPreviewSong = (slideIdx = previewSlideIndex) => {
-    if (!previewSong) return;
+  // Direct Live Song Presentation: Shows song on Live View with all its slides without modifying the schedule
+  const showSongOnLiveDirectly = (song: SongItem, startSlideIndex = 0, switchLayout = false) => {
     const existingSchedItem = schedule.find(
-      (item) => item.sourceId === previewSong.id || (item.title === previewSong.title && item.type === 'song')
+      (item) => item.sourceId === song.id || (item.title === song.title && item.type === 'song')
     );
     if (existingSchedItem) {
+      setLiveAdhocItem(null);
       setActiveItemId(existingSchedItem.id);
-      setActiveSlideIndex(Math.max(0, Math.min(slideIdx, existingSchedItem.slides.length - 1)));
-      setCenterTab('live');
+      setActiveSlideIndex(Math.max(0, Math.min(startSlideIndex, existingSchedItem.slides.length - 1)));
     } else {
-      addSongToSchedule(previewSong, true, slideIdx);
+      const directItem: ScheduleItem = {
+        id: `live-song-${song.id}`,
+        type: 'song',
+        title: song.title,
+        subtitle: `${song.author} • Key of ${song.musicalKey}`,
+        sourceId: song.id,
+        backgroundId: song.defaultBackgroundId || defaultSongBackgroundId || activeBackground.id,
+        themeId: activeTheme.id,
+        slides: song.slides,
+      };
+      setLiveAdhocItem(directItem);
+      setActiveItemId(directItem.id);
+      setActiveSlideIndex(Math.max(0, Math.min(startSlideIndex, song.slides.length - 1)));
     }
+    if (switchLayout && centerLayoutMode === 'preview') {
+      setCenterLayoutMode('live');
+    }
+  };
+
+  // Direct Live Scripture Presentation: Shows scripture on Live View with all slides without modifying the schedule
+  const showScriptureOnLiveDirectly = (versesToCompile: BibleVerse[], startSlideIndex = 0, switchLayout = true) => {
+    if (versesToCompile.length === 0) return;
+    const first = versesToCompile[0];
+    const last = versesToCompile[versesToCompile.length - 1];
+    const refTitle = `${first.book} ${first.chapter}:${first.verse}${
+      versesToCompile.length > 1 ? `–${last.verse}` : ''
+    } (${first.translation})`;
+
+    const compiledSlides: Slide[] = versesToCompile.map((v) => ({
+      id: `scr-${v.book}-${v.chapter}-${v.verse}-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+      tag: 'Scripture',
+      lines: [`${v.verse} ${v.text}`],
+      subtext: `${v.book} ${v.chapter}:${v.verse} (${v.translation})`,
+    }));
+
+    const directItem: ScheduleItem = {
+      id: `live-scr-${Date.now()}`,
+      type: 'scripture',
+      title: refTitle,
+      subtitle: 'Scripture Reading',
+      backgroundId: defaultScriptureBackgroundId || activeBackground.id,
+      themeId: 'theme-scripture-classic',
+      slides: compiledSlides,
+    };
+
+    setLiveAdhocItem(directItem);
+    setActiveItemId(directItem.id);
+    setActiveSlideIndex(Math.max(0, Math.min(startSlideIndex, compiledSlides.length - 1)));
+    if (switchLayout && centerLayoutMode === 'preview') {
+      setCenterLayoutMode('live');
+    }
+  };
+
+  const goLiveWithPreviewSong = (slideIdx = previewSlideIndex) => {
+    if (!previewSong) return;
+    showSongOnLiveDirectly(previewSong, slideIdx, true);
+  };
+
+  const applyBackgroundToSongs = (bgId: string) => {
+    setSongs((prev) =>
+      prev.map((s) => ({
+        ...s,
+        defaultBackgroundId: bgId,
+      }))
+    );
+  };
+
+  const handleCustomLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      if (!dataUrl) return;
+      const newLogoAsset: MediaAsset = {
+        id: `custom-logo-${Date.now()}`,
+        name: file.name.replace(/\.[^/.]+$/, ''),
+        category: 'Logo / Graphic',
+        type: 'image',
+        previewGradient: 'from-amber-600 to-amber-950',
+        mediaUrl: dataUrl,
+      };
+      setMediaPool((prev) => [newLogoAsset, ...prev.filter((m) => !m.id.startsWith('custom-logo'))]);
+      setDefaultLogoMediaId(newLogoAsset.id);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   // Global Zero-Latency Keyboard Shortcuts
@@ -925,7 +1074,9 @@ const OperatorConsole: React.FC = () => {
     if (goLiveImmediately) {
       setActiveItemId(newItem.id);
       setActiveSlideIndex(Math.max(0, Math.min(startSlideIndex, song.slides.length - 1)));
-      setCenterTab('live');
+      if (centerLayoutMode === 'preview') {
+        setCenterLayoutMode('live');
+      }
     }
   };
 
@@ -1452,7 +1603,9 @@ const OperatorConsole: React.FC = () => {
   const handleSongItemSelect = (songId: string, index: number, e: React.MouseEvent) => {
     setPreviewSongId(songId);
     setPreviewSlideIndex(0);
-    setCenterTab('preview');
+    if (centerLayoutMode === 'live') {
+      setCenterLayoutMode('preview');
+    }
 
     if (e.shiftKey && lastClickedSongIdx !== null) {
       const start = Math.min(lastClickedSongIdx, index);
@@ -1474,7 +1627,7 @@ const OperatorConsole: React.FC = () => {
     verse: BibleVerse,
     index: number,
     e: React.MouseEvent,
-    projectOnSingleClick = true
+    projectOnSingleClick = false
   ) => {
     const vKey = getVerseKey(verse);
     if (e.shiftKey && lastClickedVerseIdx !== null) {
@@ -1491,7 +1644,7 @@ const OperatorConsole: React.FC = () => {
       setSelectedVerseKeys([vKey]);
       setLastClickedVerseIdx(index);
       if (projectOnSingleClick) {
-        sendVerseListToSchedule([verse], true);
+        showScriptureOnLiveDirectly([verse], 0);
       }
     }
   };
@@ -1649,6 +1802,789 @@ const OperatorConsole: React.FC = () => {
         addMediaAssetsToSchedule(assetsToAdd, false);
       }
     } catch {}
+  };
+
+  // -------------------------------------------------------------------------
+  // WORKSPACE RENDERERS (Modularized for Single & Side-by-Side Dual View Modes)
+  // -------------------------------------------------------------------------
+  const renderLiveHeader = (isSideBySide = false) => (
+    <div className="p-3 bg-booth-900 border-b border-booth-800 flex flex-col gap-2 shrink-0">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-wider border border-emerald-500/40 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+              <span>LIVE: {activeItem?.type || 'EMPTY'}</span>
+            </span>
+            <h2 className="font-bold text-sm lg:text-base text-white truncate">
+              {activeItem?.title || 'No Schedule Items'}
+            </h2>
+          </div>
+          <p className="text-xs text-slate-400 truncate mt-0.5">
+            {activeItem?.subtitle ||
+              (schedule.length === 0
+                ? 'Service schedule is currently empty'
+                : 'Select an item to present')}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={() => setShowQuickSlideModal(true)}
+            disabled={!activeItem}
+            className="px-2.5 py-1.5 rounded-lg bg-booth-800 hover:bg-booth-700 text-xs font-bold text-amber-300 border border-booth-700 flex items-center gap-1 disabled:opacity-40"
+            title="Add a spontaneous lyric or announcement slide on the fly"
+          >
+            <Zap className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">+ Quick Slide</span>
+          </button>
+          <div className="flex items-center gap-1 bg-booth-950 p-1 rounded-lg border border-booth-800">
+            <button
+              onClick={goToPrevSlide}
+              disabled={!activeItem || activeItem.slides.length === 0}
+              className="px-2.5 py-1.5 rounded bg-booth-850 hover:bg-booth-700 text-xs font-bold text-white flex items-center gap-1 disabled:opacity-40"
+              title="Previous Slide (Left/Up Arrow)"
+            >
+              <SkipBack className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Prev</span>
+            </button>
+            <button
+              onClick={goToNextSlide}
+              disabled={!activeItem || activeItem.slides.length === 0}
+              className="px-3.5 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-xs font-black text-white flex items-center gap-1 shadow disabled:opacity-40"
+              title="Next Slide (Spacebar / Right Arrow)"
+            >
+              <span>Next</span>
+              <SkipForward className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Dynamic Song Flow Control Bar + Quick Slide Transition & Text Boundary Controls */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">
+            Jump:
+          </span>
+          {sectionJumpButtons.map(({ tag, index }) => {
+            const isCurrentSection = currentSlide?.tag === tag;
+            return (
+              <button
+                key={`${tag}-${index}`}
+                onClick={() => setActiveSlideIndex(index)}
+                className={`px-2 py-0.5 rounded-md text-xs font-bold border transition ${
+                  isCurrentSection
+                    ? 'bg-emerald-500 text-black border-emerald-300 shadow font-black'
+                    : `${getTagBadgeStyle(tag)} hover:brightness-125`
+                }`}
+              >
+                {tag}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center gap-1.5 bg-booth-950 px-2 py-1 rounded-lg border border-booth-800 flex-wrap">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-sky-400">
+            Transition:
+          </span>
+          <select
+            value={routingSettings.transition?.type || 'fade'}
+            onChange={(e) => {
+              const nextType = e.target.value as SlideTransitionType;
+              handleUpdateRouting({
+                ...routingSettings,
+                transition: {
+                  type: nextType,
+                  durationMs: routingSettings.transition?.durationMs ?? 380,
+                  easing:
+                    routingSettings.transition?.easing ||
+                    'cubic-bezier(0.22, 1, 0.36, 1)',
+                },
+              });
+            }}
+            className="bg-booth-900 border border-booth-700 rounded px-1.5 py-0.5 text-[11px] font-bold text-white focus:outline-none"
+            title="Select slide transition animation"
+          >
+            <option value="fade">Crossfade</option>
+            <option value="slide-up">Slide Up</option>
+            <option value="slide-down">Slide Down</option>
+            <option value="slide-left">Push Left</option>
+            <option value="zoom-in">Scale Zoom</option>
+            <option value="blur-fade">Blur Dissolve</option>
+            <option value="flip-3d">3D Flip</option>
+            <option value="cut">Instant Cut (0ms)</option>
+          </select>
+
+          <select
+            value={routingSettings.transition?.durationMs ?? 380}
+            onChange={(e) => {
+              const nextMs = parseInt(e.target.value, 10);
+              handleUpdateRouting({
+                ...routingSettings,
+                transition: {
+                  type: routingSettings.transition?.type || 'fade',
+                  durationMs: nextMs,
+                  easing:
+                    routingSettings.transition?.easing ||
+                    'cubic-bezier(0.22, 1, 0.36, 1)',
+                },
+              });
+            }}
+            className="bg-booth-900 border border-booth-700 rounded px-1 py-0.5 text-[11px] font-mono text-amber-300 focus:outline-none"
+            title="Transition Speed"
+          >
+            <option value={180}>180ms</option>
+            <option value={380}>380ms</option>
+            <option value={600}>600ms</option>
+            <option value={950}>950ms</option>
+          </select>
+
+          {!isSideBySide && (
+            <button
+              type="button"
+              onClick={() => {
+                setDisplaySettingsTab('text-boundary');
+                setDisplaySettingsOpen(true);
+              }}
+              className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-[10px] font-bold text-amber-300 flex items-center gap-1"
+              title="Open Text Boundary Box, Font & Word Wrap Studio"
+            >
+              <Move className="w-3 h-3" />
+              <span>Text Boundary & Fonts</span>
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderPreviewHeader = (isSideBySide = false) => (
+    <div className="p-3 bg-booth-900 border-b border-booth-800 flex flex-col gap-2 shrink-0">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded bg-amber-500 text-black text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+              <Eye className="w-3 h-3" />
+              <span>SONG PREVIEW</span>
+            </span>
+            <h2 className="font-bold text-sm lg:text-base text-white truncate">
+              {previewSong?.title || 'No Song Selected'}
+            </h2>
+          </div>
+          <p className="text-xs text-slate-300 truncate mt-0.5">
+            {previewSong
+              ? `${previewSong.author} • Key: ${previewSong.musicalKey}${
+                  previewSong.bpm ? ` • ${previewSong.bpm} BPM` : ''
+                }`
+              : 'Select any song from the left library to preview its slides'}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          {previewSong && (
+            <>
+              <button
+                onClick={() => addSongToSchedule(previewSong, false)}
+                className="px-2.5 py-1.5 rounded-lg bg-booth-800 hover:bg-booth-700 text-xs font-semibold text-slate-200 border border-booth-700"
+                title="Add this song to the service schedule"
+              >
+                + Schedule
+              </button>
+              <button
+                onClick={() => goLiveWithPreviewSong(previewSlideIndex)}
+                className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-black text-white flex items-center gap-1.5 shadow"
+                title="Project this song live to screen immediately"
+              >
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Go Live</span>
+              </button>
+            </>
+          )}
+          <div className="flex items-center gap-1 bg-booth-950 p-1 rounded-lg border border-booth-800">
+            <button
+              onClick={goToPrevPreviewSlide}
+              disabled={!previewSong || previewSong.slides.length === 0}
+              className="px-2.5 py-1.5 rounded bg-booth-850 hover:bg-booth-700 text-xs font-bold text-white flex items-center gap-1 disabled:opacity-40"
+              title="Previous Preview Slide"
+            >
+              <SkipBack className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Prev</span>
+            </button>
+            <button
+              onClick={goToNextPreviewSlide}
+              disabled={!previewSong || previewSong.slides.length === 0}
+              className="px-2.5 py-1.5 rounded bg-booth-850 hover:bg-booth-700 text-xs font-bold text-white flex items-center gap-1 disabled:opacity-40"
+              title="Next Preview Slide"
+            >
+              <span className="hidden sm:inline">Next</span>
+              <SkipForward className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Dynamic Song Flow Control Bar for Preview Song */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 mr-1">
+            Preview Jump:
+          </span>
+          {previewSectionJumpButtons.map(({ tag, index }) => {
+            const isCurrentSection = previewSlide?.tag === tag;
+            return (
+              <button
+                key={`preview-${tag}-${index}`}
+                onClick={() => {
+                  setPreviewSlideIndex(index);
+                  if (previewSong) {
+                    showSongOnLiveDirectly(previewSong, index);
+                  }
+                }}
+                className={`px-2 py-0.5 rounded-md text-xs font-bold border transition ${
+                  isCurrentSection
+                    ? 'bg-amber-400 text-black border-amber-300 shadow font-black'
+                    : `${getTagBadgeStyle(tag)} hover:brightness-125`
+                }`}
+              >
+                {tag}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="text-[10px] text-slate-400 flex items-center gap-1.5 bg-booth-950 px-2 py-0.5 rounded-lg border border-booth-800">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+          <span>Clicking slide pushes directly to Live View</span>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderLiveSlideDeck = (isSideBySide = false) => {
+    if (!activeItem || activeItem.slides.length === 0) {
+      return (
+        <div className="h-full min-h-[300px] flex flex-col items-center justify-center p-8 text-center text-slate-500 space-y-3">
+          <Layers className="w-12 h-12 text-slate-600 mb-1" />
+          <h3 className="text-base font-bold text-slate-300">
+            {schedule.length === 0
+              ? 'Service Schedule is Empty'
+              : 'No Slides in Selected Item'}
+          </h3>
+          <p className="text-xs text-slate-400 max-w-sm">
+            {schedule.length === 0
+              ? 'Click "+ Schedule" on any song, Bible passage, or media item, or drag and drop items to begin presenting.'
+              : 'Add slides to this item using "+ Quick Slide" or select another item from the schedule.'}
+          </p>
+        </div>
+      );
+    }
+
+    if (slideDeckViewMode === 'grid') {
+      return (
+        <div
+          className={`grid ${
+            isSideBySide
+              ? 'grid-cols-1 xl:grid-cols-2'
+              : 'grid-cols-2 lg:grid-cols-3'
+          } gap-3`}
+        >
+          {activeItem.slides.map((slide, idx) => {
+            const isLive = idx === activeSlideIndex;
+            const isNext = idx === activeSlideIndex + 1;
+            const isEditingThis = quickEditSlideId === slide.id;
+
+            return (
+              <div
+                key={slide.id}
+                onClick={() => {
+                  if (!isEditingThis) setActiveSlideIndex(idx);
+                }}
+                className={`relative rounded-xl border-2 p-3 flex flex-col justify-between transition-all cursor-pointer min-h-[148px] ${
+                  isLive
+                    ? 'bg-emerald-950/35 border-emerald-400 ring-4 ring-emerald-500/30 shadow-xl'
+                    : isNext
+                    ? 'bg-amber-950/20 border-amber-500/70 hover:border-amber-400'
+                    : 'bg-booth-900 border-booth-800 hover:border-booth-600'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-1 mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`w-5 h-5 rounded-md flex items-center justify-center font-mono text-[11px] font-black ${
+                        isLive
+                          ? 'bg-emerald-400 text-black'
+                          : isNext
+                          ? 'bg-amber-500 text-black'
+                          : 'bg-booth-800 text-slate-400'
+                      }`}
+                    >
+                      {idx + 1}
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${getTagBadgeStyle(
+                        slide.tag
+                      )}`}
+                    >
+                      {slide.tag}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    {isLive && (
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-500 text-black font-black text-[9px] uppercase tracking-wider flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-black animate-ping" />
+                        ON AIR
+                      </span>
+                    )}
+                    {isNext && !isLive && (
+                      <span className="px-1.5 py-0.5 rounded bg-amber-500/30 text-amber-300 font-bold text-[9px] uppercase">
+                        NEXT
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startQuickEdit(slide);
+                      }}
+                      className="p-1 rounded hover:bg-booth-700 text-slate-400 hover:text-white"
+                      title="Quick-Edit Slide Live (Instant Reflow)"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {isEditingThis ? (
+                  <div
+                    className="space-y-2 z-20"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <textarea
+                      rows={3}
+                      value={quickEditText}
+                      onChange={(e) => setQuickEditText(e.target.value)}
+                      className="w-full bg-booth-950 border border-amber-400 rounded p-1.5 text-xs text-white focus:outline-none"
+                      autoFocus
+                    />
+                    <input
+                      type="text"
+                      placeholder="Subtext / Reference (e.g. Genesis 1:1)"
+                      value={quickEditSubtext}
+                      onChange={(e) => setQuickEditSubtext(e.target.value)}
+                      className="w-full bg-booth-950 border border-booth-700 rounded p-1 text-[11px] font-mono text-amber-300"
+                    />
+                    <div className="flex justify-end gap-1.5">
+                      <button
+                        onClick={() => setQuickEditSlideId(null)}
+                        className="px-2 py-0.5 rounded bg-booth-800 text-[10px] text-slate-300"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={saveQuickEdit}
+                        className="px-2.5 py-0.5 rounded bg-emerald-500 text-black font-bold text-[10px]"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="my-auto space-y-1">
+                    {slide.lines.map((line, lIdx) => (
+                      <p
+                        key={lIdx}
+                        className={`text-xs leading-snug font-semibold ${
+                          isLive ? 'text-white' : 'text-slate-200'
+                        }`}
+                      >
+                        {line}
+                      </p>
+                    ))}
+                  </div>
+                )}
+
+                {slide.chords && !isEditingThis && (
+                  <div className="mt-2 pt-1.5 border-t border-booth-800 flex items-center justify-between text-[11px] text-amber-300 font-mono">
+                    <span className="truncate">♪ {slide.chords}</span>
+                    <span className="text-[10px] text-slate-500 font-sans">
+                      Key [{idx + 1}]
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    /* LIVE: LIST VIEW */
+    return (
+      <div className="space-y-2">
+        {activeItem.slides.map((slide, idx) => {
+          const isLive = idx === activeSlideIndex;
+          const isNext = idx === activeSlideIndex + 1;
+          const isEditingThis = quickEditSlideId === slide.id;
+
+          return (
+            <div
+              key={slide.id}
+              onClick={() => {
+                if (!isEditingThis) setActiveSlideIndex(idx);
+              }}
+              className={`rounded-xl border-2 p-3 transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                isLive
+                  ? 'bg-emerald-950/35 border-emerald-400 ring-2 ring-emerald-400/40 shadow-md'
+                  : isNext
+                  ? 'bg-amber-950/20 border-amber-500/70 hover:border-amber-400'
+                  : 'bg-booth-900 border-booth-800 hover:border-booth-600'
+              }`}
+            >
+              {/* Left column: Index + Tag + Badges */}
+              <div className="flex items-center gap-2 shrink-0">
+                <span
+                  className={`w-6 h-6 rounded flex items-center justify-center font-mono text-xs font-black ${
+                    isLive
+                      ? 'bg-emerald-400 text-black'
+                      : isNext
+                      ? 'bg-amber-500 text-black'
+                      : 'bg-booth-800 text-slate-300'
+                  }`}
+                >
+                  {idx + 1}
+                </span>
+                <span
+                  className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase border ${getTagBadgeStyle(
+                    slide.tag
+                  )}`}
+                >
+                  {slide.tag}
+                </span>
+                {isLive && (
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-500 text-black font-black text-[9px] uppercase tracking-wider shrink-0 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-black animate-ping" />
+                    ON AIR
+                  </span>
+                )}
+                {isNext && !isLive && (
+                  <span className="px-1.5 py-0.5 rounded bg-amber-500/30 text-amber-300 font-bold text-[9px] uppercase shrink-0">
+                    NEXT
+                  </span>
+                )}
+              </div>
+
+              {/* Center column: Lines + Chords or Quick Edit */}
+              <div className="flex-1 min-w-0">
+                {isEditingThis ? (
+                  <div
+                    className="space-y-1.5"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <textarea
+                      rows={2}
+                      value={quickEditText}
+                      onChange={(e) => setQuickEditText(e.target.value)}
+                      className="w-full bg-booth-950 border border-amber-400 rounded p-1.5 text-xs text-white"
+                      autoFocus
+                    />
+                    <input
+                      type="text"
+                      placeholder="Subtext / Reference (optional)"
+                      value={quickEditSubtext}
+                      onChange={(e) => setQuickEditSubtext(e.target.value)}
+                      className="w-full bg-booth-950 border border-booth-700 rounded p-1 text-[11px] font-mono text-amber-300"
+                    />
+                    <div className="flex justify-end gap-1.5">
+                      <button
+                        onClick={() => setQuickEditSlideId(null)}
+                        className="px-2 py-0.5 rounded bg-booth-800 text-[11px] text-slate-300"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={saveQuickEdit}
+                        className="px-2.5 py-0.5 rounded bg-emerald-500 text-black font-bold text-[11px]"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-xs sm:text-sm font-semibold text-slate-100 truncate">
+                      {slide.lines.join('  •  ')}
+                    </p>
+                    {slide.chords && (
+                      <p className="text-[11px] font-mono text-amber-300/90 mt-0.5 truncate">
+                        ♪ {slide.chords}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Right column: Edit + Live Switcher */}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startQuickEdit(slide);
+                  }}
+                  className="p-1.5 rounded hover:bg-booth-700 text-slate-400 hover:text-white"
+                  title="Quick-Edit Slide Live"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                </button>
+                {isLive ? (
+                  <span className="px-3 py-1 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold text-xs">
+                    Active
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveSlideIndex(idx);
+                    }}
+                    className="px-3 py-1 rounded bg-booth-800 hover:bg-emerald-600 hover:text-white border border-booth-700 text-xs font-bold text-slate-200 transition"
+                  >
+                    Go Live
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderPreviewSlideDeck = (isSideBySide = false) => {
+    if (!previewSong) {
+      return (
+        <div className="h-full min-h-[300px] flex flex-col items-center justify-center p-8 text-center text-slate-500 space-y-3">
+          <Music className="w-12 h-12 text-slate-600 mb-1" />
+          <h3 className="text-base font-bold text-slate-300">
+            No Song Selected for Preview
+          </h3>
+          <p className="text-xs text-slate-400 max-w-sm">
+            Click any song in the Songs tab on the left to preview its verses, inspect chords, and test presentation flow before projecting.
+          </p>
+        </div>
+      );
+    }
+
+    if (slideDeckViewMode === 'grid') {
+      return (
+        <div
+          className={`grid ${
+            isSideBySide
+              ? 'grid-cols-1 xl:grid-cols-2'
+              : 'grid-cols-2 lg:grid-cols-3'
+          } gap-3`}
+        >
+          {previewSong.slides.map((slide, idx) => {
+            const isPreviewed = idx === previewSlideIndex;
+            const isLiveOnProjector =
+              activeItem?.sourceId === previewSong.id && idx === activeSlideIndex;
+
+            return (
+              <div
+                key={slide.id}
+                onClick={() => {
+                  setPreviewSlideIndex(idx);
+                  if (previewSong) {
+                    showSongOnLiveDirectly(previewSong, idx);
+                  }
+                }}
+                className={`relative rounded-xl border-2 p-3 flex flex-col justify-between transition-all cursor-pointer min-h-[148px] ${
+                  isLiveOnProjector
+                    ? 'bg-emerald-950/30 border-emerald-400 ring-2 ring-emerald-500/40 shadow-xl'
+                    : isPreviewed
+                    ? 'bg-amber-950/30 border-amber-400 ring-4 ring-amber-500/30 shadow-xl'
+                    : 'bg-booth-900 border-booth-800 hover:border-booth-600'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-1 mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`w-5 h-5 rounded-md flex items-center justify-center font-mono text-[11px] font-black ${
+                        isLiveOnProjector
+                          ? 'bg-emerald-400 text-black'
+                          : isPreviewed
+                          ? 'bg-amber-400 text-black'
+                          : 'bg-booth-800 text-slate-400'
+                      }`}
+                    >
+                      {idx + 1}
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${getTagBadgeStyle(
+                        slide.tag
+                      )}`}
+                    >
+                      {slide.tag}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    {isLiveOnProjector && (
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-500 text-black font-black text-[9px] uppercase tracking-wider flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-black animate-ping" />
+                        ON AIR
+                      </span>
+                    )}
+                    {isPreviewed && !isLiveOnProjector && (
+                      <span className="px-1.5 py-0.5 rounded bg-amber-500 text-black font-black text-[9px] uppercase tracking-wider">
+                        PREVIEW
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPreviewSlideIndex(idx);
+                        if (previewSong) {
+                          showSongOnLiveDirectly(previewSong, idx);
+                        }
+                      }}
+                      className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-[10px] font-bold text-white flex items-center gap-1 shadow"
+                      title="Project this verse live to screen"
+                    >
+                      <Play className="w-2.5 h-2.5 fill-current" />
+                      <span>Live</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="my-auto space-y-1">
+                  {slide.lines.map((line, lIdx) => (
+                    <p
+                      key={lIdx}
+                      className={`text-xs leading-snug font-semibold ${
+                        isLiveOnProjector
+                          ? 'text-emerald-200'
+                          : isPreviewed
+                          ? 'text-amber-100'
+                          : 'text-slate-200'
+                      }`}
+                    >
+                      {line}
+                    </p>
+                  ))}
+                </div>
+
+                {slide.chords && (
+                  <div className="mt-2 pt-1.5 border-t border-booth-800 flex items-center justify-between text-[11px] text-amber-300 font-mono">
+                    <span className="truncate">♪ {slide.chords}</span>
+                    <span className="text-[10px] text-slate-500 font-sans">
+                      Key [{idx + 1}]
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    /* PREVIEW: LIST VIEW */
+    return (
+      <div className="space-y-2">
+        {previewSong.slides.map((slide, idx) => {
+          const isPreviewed = idx === previewSlideIndex;
+          const isLiveOnProjector =
+            activeItem?.sourceId === previewSong.id && idx === activeSlideIndex;
+
+          return (
+            <div
+              key={slide.id}
+              onClick={() => {
+                setPreviewSlideIndex(idx);
+                if (previewSong) {
+                  showSongOnLiveDirectly(previewSong, idx);
+                }
+              }}
+              className={`rounded-xl border-2 p-3 transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                isLiveOnProjector
+                  ? 'bg-emerald-950/30 border-emerald-400 ring-2 ring-emerald-500/40 shadow-md'
+                  : isPreviewed
+                  ? 'bg-amber-950/35 border-amber-400 ring-2 ring-amber-400/40 shadow-md'
+                  : 'bg-booth-900 border-booth-800 hover:border-booth-600'
+              }`}
+            >
+              {/* Left column: Index + Tag + Badges */}
+              <div className="flex items-center gap-2 shrink-0">
+                <span
+                  className={`w-6 h-6 rounded flex items-center justify-center font-mono text-xs font-black ${
+                    isLiveOnProjector
+                      ? 'bg-emerald-400 text-black'
+                      : isPreviewed
+                      ? 'bg-amber-400 text-black'
+                      : 'bg-booth-800 text-slate-300'
+                  }`}
+                >
+                  {idx + 1}
+                </span>
+                <span
+                  className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase border ${getTagBadgeStyle(
+                    slide.tag
+                  )}`}
+                >
+                  {slide.tag}
+                </span>
+                {isLiveOnProjector && (
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-500 text-black font-black text-[9px] uppercase tracking-wider shrink-0 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-black animate-ping" />
+                    ON AIR
+                  </span>
+                )}
+                {isPreviewed && !isLiveOnProjector && (
+                  <span className="px-1.5 py-0.5 rounded bg-amber-500 text-black font-black text-[9px] uppercase tracking-wider shrink-0">
+                    PREVIEW
+                  </span>
+                )}
+              </div>
+
+              {/* Center column: Lyrics + Chords */}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs sm:text-sm font-semibold text-slate-100 truncate">
+                  {slide.lines.join('  •  ')}
+                </p>
+                {slide.chords && (
+                  <p className="text-[11px] font-mono text-amber-300/90 mt-0.5 truncate">
+                    ♪ {slide.chords}
+                  </p>
+                )}
+              </div>
+
+              {/* Right column: Action */}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPreviewSlideIndex(idx);
+                    if (previewSong) {
+                      showSongOnLiveDirectly(previewSong, idx);
+                    }
+                  }}
+                  className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-xs font-black text-white flex items-center gap-1 shadow"
+                >
+                  <Play className="w-3 h-3 fill-current" />
+                  <span>Go Live</span>
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   return (
@@ -2046,6 +2982,7 @@ const OperatorConsole: React.FC = () => {
                         );
                       }}
                       onClick={(e) => handleSongItemSelect(song.id, idx, e)}
+                      onDoubleClick={() => showSongOnLiveDirectly(song, 0)}
                       onContextMenu={(e) => {
                         e.preventDefault();
                         if (!selectedSongIds.includes(song.id)) {
@@ -2126,10 +3063,13 @@ const OperatorConsole: React.FC = () => {
                               e.stopPropagation();
                               setPreviewSongId(song.id);
                               setPreviewSlideIndex(0);
-                              setCenterTab('preview');
+                              if (centerLayoutMode === 'live') {
+                                setCenterLayoutMode('preview');
+                              }
                             }}
                             className={`px-2 py-1 rounded text-xs font-semibold flex items-center gap-1 border transition ${
-                              isPreviewActive && centerTab === 'preview'
+                              isPreviewActive &&
+                              (centerLayoutMode === 'preview' || centerLayoutMode === 'side-by-side')
                                 ? 'bg-amber-500 text-black border-amber-400 font-bold'
                                 : 'bg-booth-800 hover:bg-booth-700 text-amber-300 border-booth-600'
                             }`}
@@ -2145,8 +3085,9 @@ const OperatorConsole: React.FC = () => {
                             + Schedule
                           </button>
                           <button
-                            onClick={() => addSongToSchedule(song, true)}
+                            onClick={() => showSongOnLiveDirectly(song, 0)}
                             className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white"
+                            title="Show directly on Live View without modifying schedule"
                           >
                             Go Live
                           </button>
@@ -2334,9 +3275,10 @@ const OperatorConsole: React.FC = () => {
                               selectedVerseKeys.includes(getVerseKey(v))
                             )
                           : filteredVerses;
-                      sendVerseListToSchedule(targetVerses, true);
+                      showScriptureOnLiveDirectly(targetVerses, 0);
                     }}
                     className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white"
+                    title="Project scripture directly to Live View without modifying schedule"
                   >
                     {selectedVerseKeys.length > 1
                       ? `Project (${selectedVerseKeys.length})`
@@ -2362,7 +3304,8 @@ const OperatorConsole: React.FC = () => {
                           JSON.stringify({ category: 'scripture', ids: keysToDrag })
                         );
                       }}
-                      onClick={(e) => handleVerseItemSelect(v, idx, e, true)}
+                      onClick={(e) => handleVerseItemSelect(v, idx, e, false)}
+                      onDoubleClick={() => showScriptureOnLiveDirectly([v], 0)}
                       onContextMenu={(e) => {
                         e.preventDefault();
                         if (!selectedVerseKeys.includes(vKey)) {
@@ -2749,10 +3692,91 @@ const OperatorConsole: React.FC = () => {
               </div>
 
               {/* Organization Logo Customization */}
-              <div className="mt-2 pt-3 border-t border-booth-800 space-y-2">
-                <h5 className="text-xs font-bold uppercase tracking-wider text-amber-400">
-                  Sanctuary Logo Screen Settings ([L] Key)
-                </h5>
+              <div className="mt-2 pt-3 border-t border-booth-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h5 className="text-xs font-bold uppercase tracking-wider text-amber-400">
+                    Sanctuary Logo & Splash Screen ([L] Key)
+                  </h5>
+                  {activeLogoAsset && (
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[9px] font-bold border border-emerald-500/40">
+                      CUSTOM ACTIVE
+                    </span>
+                  )}
+                </div>
+
+                {/* Hidden File Input for Custom Logo Upload */}
+                <input
+                  ref={customLogoInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif"
+                  onChange={handleCustomLogoUpload}
+                  className="hidden"
+                />
+
+                {/* Uploaded Logo Preview / Upload Area */}
+                <div className="p-3 bg-booth-900/80 rounded-xl border border-booth-800 space-y-2.5">
+                  <label className="block text-[10px] uppercase font-bold text-slate-400">
+                    Custom Ministry / Church Logo
+                  </label>
+
+                  {activeLogoAsset ? (
+                    <div className="flex items-center gap-3 bg-booth-950 p-2.5 rounded-lg border border-booth-700">
+                      <div className="w-14 h-14 rounded-lg bg-black/60 border border-booth-700 flex items-center justify-center p-1 shrink-0 overflow-hidden">
+                        {activeLogoAsset.mediaUrl ? (
+                          <img
+                            src={activeLogoAsset.mediaUrl}
+                            alt={activeLogoAsset.name}
+                            className="w-full h-full object-contain"
+                          />
+                        ) : (
+                          <ImageIcon className="w-6 h-6 text-amber-400" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-white truncate">
+                          {activeLogoAsset.name}
+                        </p>
+                        <p className="text-[10px] text-emerald-400 font-medium">
+                          Active Sanctuary Logo ([L])
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-1.5">
+                          <button
+                            type="button"
+                            onClick={() => customLogoInputRef.current?.click()}
+                            className="px-2 py-0.5 rounded bg-booth-800 hover:bg-booth-700 text-[10px] font-bold text-amber-300 border border-booth-700 transition"
+                          >
+                            Change Logo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDefaultLogoMediaId('')}
+                            className="px-2 py-0.5 rounded bg-red-950/60 hover:bg-red-900/80 text-[10px] font-bold text-red-300 border border-red-800/60 transition"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => customLogoInputRef.current?.click()}
+                      className="p-3 border-2 border-dashed border-booth-700 hover:border-amber-400/70 rounded-xl bg-booth-950/60 hover:bg-booth-950 cursor-pointer text-center transition group"
+                    >
+                      <div className="flex flex-col items-center justify-center space-y-1.5">
+                        <div className="w-8 h-8 rounded-full bg-amber-500/10 group-hover:bg-amber-500/20 text-amber-400 flex items-center justify-center transition">
+                          <Upload className="w-4 h-4" />
+                        </div>
+                        <p className="text-xs font-bold text-slate-200 group-hover:text-amber-300 transition">
+                          Upload Custom Logo File
+                        </p>
+                        <p className="text-[10px] text-slate-400">
+                          PNG, JPG, SVG, or WEBP with transparency
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <div>
                   <label className="block text-[10px] uppercase text-slate-400 mb-1">
                     Church / Event Title
@@ -2784,23 +3808,23 @@ const OperatorConsole: React.FC = () => {
             CENTER PANEL (6 cols): Live Service & Song Preview + Dynamic Slide Deck + Monitors
            ------------------------------------------------------------------- */}
         <main className="col-span-6 bg-booth-950 flex flex-col min-h-0">
-          {/* Workspace Tabs (Live Service vs Song Preview) + Slide Deck View Mode (Grid vs List) */}
+          {/* Top Control Bar: Layout View Switcher (Live / Preview / Side-by-Side) + Slide Deck View Mode (Grid vs List) */}
           <div className="bg-booth-950 px-3 py-2 border-b border-booth-800 flex items-center justify-between gap-2 shrink-0 flex-wrap">
             <div className="flex items-center gap-1.5 flex-wrap">
               <button
                 type="button"
-                onClick={() => setCenterTab('live')}
+                onClick={() => setCenterLayoutMode('live')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition ${
-                  centerTab === 'live'
+                  centerLayoutMode === 'live'
                     ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-400/40'
                     : 'bg-booth-900 hover:bg-booth-800 text-slate-300 border border-booth-800'
                 }`}
-                title="Switch to Live Service presentation controls"
+                title="Single View: Live Service presentation controls"
               >
                 <span className="w-2 h-2 rounded-full bg-red-400 animate-ping" />
-                <span>Live Service</span>
+                <span>Live View</span>
                 {activeItem && (
-                  <span className="max-w-[130px] truncate text-[11px] opacity-85">
+                  <span className="max-w-[110px] truncate text-[11px] opacity-85">
                     ({activeItem.title})
                   </span>
                 )}
@@ -2808,21 +3832,35 @@ const OperatorConsole: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => setCenterTab('preview')}
+                onClick={() => setCenterLayoutMode('preview')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition ${
-                  centerTab === 'preview'
+                  centerLayoutMode === 'preview'
                     ? 'bg-amber-500 text-black shadow-sm ring-2 ring-amber-300/40'
                     : 'bg-booth-900 hover:bg-booth-800 text-slate-300 border border-booth-800'
                 }`}
-                title="Preview selected song and inspect verses before going live"
+                title="Single View: Song Preview and verse inspection"
               >
                 <Eye className="w-3.5 h-3.5" />
-                <span>Song Preview</span>
+                <span>Preview</span>
                 {previewSong && (
-                  <span className="max-w-[140px] truncate text-[11px] opacity-90 font-black">
+                  <span className="max-w-[110px] truncate text-[11px] opacity-90 font-black">
                     ({previewSong.title})
                   </span>
                 )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCenterLayoutMode('side-by-side')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition ${
+                  centerLayoutMode === 'side-by-side'
+                    ? 'bg-sky-600 text-white shadow-sm ring-2 ring-sky-400/40'
+                    : 'bg-booth-900 hover:bg-booth-800 text-slate-300 border border-booth-800'
+                }`}
+                title="Dual View: Preview Deck and Live Service Deck side by side"
+              >
+                <Columns className="w-3.5 h-3.5" />
+                <span>Side-by-Side</span>
               </button>
             </div>
 
@@ -2837,7 +3875,7 @@ const OperatorConsole: React.FC = () => {
                     ? 'bg-booth-800 text-amber-300 font-bold border border-booth-700 shadow-sm'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
-                title="Grid View (3-Column Slide Cards)"
+                title="Grid View (Slide Cards)"
               >
                 <LayoutGrid className="w-3.5 h-3.5" />
                 <span>Grid</span>
@@ -2858,723 +3896,40 @@ const OperatorConsole: React.FC = () => {
             </div>
           </div>
 
-          {/* ---------------- LIVE SERVICE MODE HEADER ---------------- */}
-          {centerTab === 'live' && (
-            <div className="p-3 bg-booth-900 border-b border-booth-800 flex flex-col gap-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-black uppercase tracking-wider border border-amber-500/40">
-                      {activeItem?.type || 'EMPTY'}
-                    </span>
-                    <h2 className="font-bold text-base text-white truncate">
-                      {activeItem?.title || 'No Schedule Items'}
-                    </h2>
-                  </div>
-                  <p className="text-xs text-slate-400 truncate">
-                    {activeItem?.subtitle || (schedule.length === 0 ? 'Service schedule is currently empty' : 'Select an item to present')}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => setShowQuickSlideModal(true)}
-                    disabled={!activeItem}
-                    className="px-3 py-1.5 rounded-lg bg-booth-800 hover:bg-booth-700 text-xs font-bold text-amber-300 border border-booth-700 flex items-center gap-1 disabled:opacity-40"
-                    title="Add a spontaneous lyric or announcement slide on the fly"
-                  >
-                    <Zap className="w-3.5 h-3.5" />
-                    <span>+ Quick Slide</span>
-                  </button>
-                  <div className="flex items-center gap-1 bg-booth-950 p-1 rounded-lg border border-booth-800">
-                    <button
-                      onClick={goToPrevSlide}
-                      disabled={!activeItem || activeItem.slides.length === 0}
-                      className="px-3 py-1.5 rounded bg-booth-850 hover:bg-booth-700 text-xs font-bold text-white flex items-center gap-1 disabled:opacity-40"
-                      title="Previous Slide (Left/Up Arrow)"
-                    >
-                      <SkipBack className="w-3.5 h-3.5" />
-                      <span>Prev</span>
-                    </button>
-                    <button
-                      onClick={goToNextSlide}
-                      disabled={!activeItem || activeItem.slides.length === 0}
-                      className="px-4 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-xs font-black text-white flex items-center gap-1 shadow disabled:opacity-40"
-                      title="Next Slide (Spacebar / Right Arrow)"
-                    >
-                      <span>Next</span>
-                      <SkipForward className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+          {/* Workspace Body: Side-by-Side Dual View vs Single Live vs Single Preview */}
+          {centerLayoutMode === 'side-by-side' ? (
+            <div className="flex-1 min-h-0 grid grid-cols-2 divide-x divide-booth-800 overflow-hidden">
+              {/* Left Column: Preview View */}
+              <div className="flex flex-col min-h-0 overflow-hidden bg-booth-950/60">
+                {renderPreviewHeader(true)}
+                <div className="flex-1 overflow-y-auto p-3">
+                  {renderPreviewSlideDeck(true)}
                 </div>
               </div>
 
-              {/* Dynamic Song Flow Control Bar + Quick Slide Transition & Text Boundary Controls */}
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">
-                    Instant Jump:
-                  </span>
-                  {sectionJumpButtons.map(({ tag, index }) => {
-                    const isCurrentSection = currentSlide?.tag === tag;
-                    return (
-                      <button
-                        key={`${tag}-${index}`}
-                        onClick={() => setActiveSlideIndex(index)}
-                        className={`px-2.5 py-1 rounded-md text-xs font-bold border transition ${
-                          isCurrentSection
-                            ? 'bg-emerald-500 text-black border-emerald-300 shadow'
-                            : `${getTagBadgeStyle(tag)} hover:brightness-125`
-                        }`}
-                      >
-                        {tag}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Inline Slide Transition Selector & Text Boundary Shortcut */}
-                <div className="flex items-center gap-1.5 bg-booth-950 px-2 py-1 rounded-lg border border-booth-800">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-sky-400">
-                    Transition:
-                  </span>
-                  <select
-                    value={routingSettings.transition?.type || 'fade'}
-                    onChange={(e) => {
-                      const nextType = e.target.value as SlideTransitionType;
-                      handleUpdateRouting({
-                        ...routingSettings,
-                        transition: {
-                          type: nextType,
-                          durationMs: routingSettings.transition?.durationMs ?? 380,
-                          easing:
-                            routingSettings.transition?.easing ||
-                            'cubic-bezier(0.22, 1, 0.36, 1)',
-                        },
-                      });
-                    }}
-                    className="bg-booth-900 border border-booth-700 rounded px-2 py-0.5 text-[11px] font-bold text-white focus:outline-none"
-                    title="Select slide transition animation for Projector & Live Output"
-                  >
-                    <option value="fade">Crossfade</option>
-                    <option value="slide-up">Slide Up</option>
-                    <option value="slide-down">Slide Down</option>
-                    <option value="slide-left">Push Left</option>
-                    <option value="zoom-in">Scale Zoom</option>
-                    <option value="blur-fade">Blur Dissolve</option>
-                    <option value="flip-3d">3D Flip</option>
-                    <option value="cut">Instant Cut (0ms)</option>
-                  </select>
-
-                  <select
-                    value={routingSettings.transition?.durationMs ?? 380}
-                    onChange={(e) => {
-                      const nextMs = parseInt(e.target.value, 10);
-                      handleUpdateRouting({
-                        ...routingSettings,
-                        transition: {
-                          type: routingSettings.transition?.type || 'fade',
-                          durationMs: nextMs,
-                          easing:
-                            routingSettings.transition?.easing ||
-                            'cubic-bezier(0.22, 1, 0.36, 1)',
-                        },
-                      });
-                    }}
-                    className="bg-booth-900 border border-booth-700 rounded px-1.5 py-0.5 text-[11px] font-mono text-amber-300 focus:outline-none"
-                    title="Transition Animation Speed"
-                  >
-                    <option value={180}>Fast (180ms)</option>
-                    <option value={380}>Smooth (380ms)</option>
-                    <option value={600}>Medium (600ms)</option>
-                    <option value={950}>Slow Worship (950ms)</option>
-                  </select>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDisplaySettingsTab('text-boundary');
-                      setDisplaySettingsOpen(true);
-                    }}
-                    className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-[10px] font-bold text-amber-300 flex items-center gap-1"
-                    title="Open Text Boundary Box, Font & Word Wrap Studio"
-                  >
-                    <Move className="w-3 h-3" />
-                    <span>Text Boundary & Fonts</span>
-                  </button>
+              {/* Right Column: Live Service View */}
+              <div className="flex flex-col min-h-0 overflow-hidden bg-booth-950">
+                {renderLiveHeader(true)}
+                <div className="flex-1 overflow-y-auto p-3">
+                  {renderLiveSlideDeck(true)}
                 </div>
               </div>
             </div>
-          )}
-
-          {/* ---------------- SONG PREVIEW MODE HEADER ---------------- */}
-          {centerTab === 'preview' && (
-            <div className="p-3 bg-booth-900 border-b border-booth-800 flex flex-col gap-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded bg-amber-500 text-black text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
-                      <Eye className="w-3 h-3" />
-                      <span>SONG PREVIEW</span>
-                    </span>
-                    <h2 className="font-bold text-base text-white truncate">
-                      {previewSong?.title || 'No Song Selected'}
-                    </h2>
-                  </div>
-                  <p className="text-xs text-slate-300 truncate mt-0.5">
-                    {previewSong
-                      ? `${previewSong.author} • Key of ${previewSong.musicalKey} • ${previewSong.bpm} BPM • CCLI #${previewSong.ccliNumber || 'N/A'}`
-                      : 'Select any song from the left library to preview its slides'}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  {previewSong && (
-                    <>
-                      <button
-                        onClick={() => addSongToSchedule(previewSong, false)}
-                        className="px-3 py-1.5 rounded-lg bg-booth-800 hover:bg-booth-700 text-xs font-semibold text-slate-200 border border-booth-700"
-                        title="Add this song to the service schedule"
-                      >
-                        + Add to Schedule
-                      </button>
-                      <button
-                        onClick={() => goLiveWithPreviewSong(previewSlideIndex)}
-                        className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-black text-white flex items-center gap-1.5 shadow"
-                        title="Project this song live to screen immediately"
-                      >
-                        <Play className="w-3.5 h-3.5 fill-current" />
-                        <span>Go Live Now</span>
-                      </button>
-                    </>
-                  )}
-                  <div className="flex items-center gap-1 bg-booth-950 p-1 rounded-lg border border-booth-800">
-                    <button
-                      onClick={goToPrevPreviewSlide}
-                      disabled={!previewSong || previewSong.slides.length === 0}
-                      className="px-3 py-1.5 rounded bg-booth-850 hover:bg-booth-700 text-xs font-bold text-white flex items-center gap-1 disabled:opacity-40"
-                      title="Previous Preview Slide"
-                    >
-                      <SkipBack className="w-3.5 h-3.5" />
-                      <span>Prev</span>
-                    </button>
-                    <button
-                      onClick={goToNextPreviewSlide}
-                      disabled={!previewSong || previewSong.slides.length === 0}
-                      className="px-3 py-1.5 rounded bg-booth-850 hover:bg-booth-700 text-xs font-bold text-white flex items-center gap-1 disabled:opacity-40"
-                      title="Next Preview Slide"
-                    >
-                      <span>Next</span>
-                      <SkipForward className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
+          ) : centerLayoutMode === 'preview' ? (
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-booth-950">
+              {renderPreviewHeader(false)}
+              <div className="flex-1 overflow-y-auto p-4">
+                {renderPreviewSlideDeck(false)}
               </div>
-
-              {/* Dynamic Song Flow Control Bar for Preview Song */}
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 mr-1">
-                    Preview Jump:
-                  </span>
-                  {previewSectionJumpButtons.map(({ tag, index }) => {
-                    const isCurrentSection = previewSlide?.tag === tag;
-                    return (
-                      <button
-                        key={`preview-${tag}-${index}`}
-                        onClick={() => setPreviewSlideIndex(index)}
-                        className={`px-2.5 py-1 rounded-md text-xs font-bold border transition ${
-                          isCurrentSection
-                            ? 'bg-amber-400 text-black border-amber-300 shadow font-black'
-                            : `${getTagBadgeStyle(tag)} hover:brightness-125`
-                        }`}
-                      >
-                        {tag}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="text-[11px] text-slate-400 flex items-center gap-1.5 bg-booth-950 px-2.5 py-1 rounded-lg border border-booth-800">
-                  <span className="w-2 h-2 rounded-full bg-amber-400" />
-                  <span>Previewing verse without changing sanctuary projector</span>
-                </div>
+            </div>
+          ) : (
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-booth-950">
+              {renderLiveHeader(false)}
+              <div className="flex-1 overflow-y-auto p-4">
+                {renderLiveSlideDeck(false)}
               </div>
             </div>
           )}
-
-          {/* ---------------- SLIDE DECK VIEW AREA (GRID vs LIST) ---------------- */}
-          <div className="flex-1 overflow-y-auto p-4">
-            {centerTab === 'live' ? (
-              /* LIVE SERVICE SLIDE DECK */
-              !activeItem || activeItem.slides.length === 0 ? (
-                <div className="h-full min-h-[300px] flex flex-col items-center justify-center p-8 text-center text-slate-500 space-y-3">
-                  <Layers className="w-12 h-12 text-slate-600 mb-1" />
-                  <h3 className="text-base font-bold text-slate-300">
-                    {schedule.length === 0
-                      ? 'Service Schedule is Empty'
-                      : 'No Slides in Selected Item'}
-                  </h3>
-                  <p className="text-xs text-slate-400 max-w-sm">
-                    {schedule.length === 0
-                      ? 'Click "+ Schedule" on any song, Bible passage, or media item, or drag and drop items to begin presenting.'
-                      : 'Add slides to this item using "+ Quick Slide" or select another item from the schedule.'}
-                  </p>
-                </div>
-              ) : slideDeckViewMode === 'grid' ? (
-                /* LIVE SERVICE: GRID VIEW */
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                  {activeItem.slides.map((slide, idx) => {
-                    const isLive = idx === activeSlideIndex;
-                    const isNext = idx === activeSlideIndex + 1;
-                    const isEditingThis = quickEditSlideId === slide.id;
-
-                    return (
-                      <div
-                        key={slide.id}
-                        onClick={() => {
-                          if (!isEditingThis) setActiveSlideIndex(idx);
-                        }}
-                        className={`relative rounded-xl border-2 p-3 flex flex-col justify-between transition-all cursor-pointer min-h-[148px] ${
-                          isLive
-                            ? 'bg-emerald-950/35 border-emerald-400 ring-4 ring-emerald-500/30 shadow-xl'
-                            : isNext
-                            ? 'bg-amber-950/20 border-amber-500/70 hover:border-amber-400'
-                            : 'bg-booth-900 border-booth-800 hover:border-booth-600'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-1 mb-2">
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className={`w-5 h-5 rounded-md flex items-center justify-center font-mono text-[11px] font-black ${
-                                isLive
-                                  ? 'bg-emerald-400 text-black'
-                                  : isNext
-                                  ? 'bg-amber-500 text-black'
-                                  : 'bg-booth-800 text-slate-400'
-                              }`}
-                            >
-                              {idx + 1}
-                            </span>
-                            <span
-                              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${getTagBadgeStyle(
-                                slide.tag
-                              )}`}
-                            >
-                              {slide.tag}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-1">
-                            {isLive && (
-                              <span className="px-1.5 py-0.5 rounded bg-emerald-500 text-black font-black text-[9px] uppercase tracking-wider flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-black animate-ping" />
-                                ON AIR
-                              </span>
-                            )}
-                            {isNext && !isLive && (
-                              <span className="px-1.5 py-0.5 rounded bg-amber-500/30 text-amber-300 font-bold text-[9px] uppercase">
-                                NEXT
-                              </span>
-                            )}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                startQuickEdit(slide);
-                              }}
-                              className="p-1 rounded hover:bg-booth-700 text-slate-400 hover:text-white"
-                              title="Quick-Edit Slide Live (Instant Reflow)"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-
-                        {isEditingThis ? (
-                          <div
-                            className="space-y-2 z-20"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <textarea
-                              rows={3}
-                              value={quickEditText}
-                              onChange={(e) => setQuickEditText(e.target.value)}
-                              className="w-full bg-booth-950 border border-amber-400 rounded p-1.5 text-xs text-white focus:outline-none"
-                              autoFocus
-                            />
-                            <input
-                              type="text"
-                              value={quickEditSubtext}
-                              onChange={(e) => setQuickEditSubtext(e.target.value)}
-                              placeholder="Subtext / reference..."
-                              className="w-full bg-booth-950 border border-booth-700 rounded px-2 py-1 text-[11px] text-slate-200"
-                            />
-                            <div className="flex justify-end gap-1.5">
-                              <button
-                                onClick={() => setQuickEditSlideId(null)}
-                                className="px-2 py-1 rounded bg-booth-800 text-[11px] text-slate-300"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                onClick={saveQuickEdit}
-                                className="px-2.5 py-1 rounded bg-emerald-500 text-black font-bold text-[11px] flex items-center gap-1"
-                              >
-                                <Check className="w-3 h-3" />
-                                Update Live
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="my-auto space-y-1">
-                            {slide.lines.map((line, lIdx) => (
-                              <p
-                                key={lIdx}
-                                className={`text-xs leading-snug font-semibold ${
-                                  isLive ? 'text-white' : 'text-slate-200'
-                                }`}
-                              >
-                                {line}
-                              </p>
-                            ))}
-                          </div>
-                        )}
-
-                        <div className="mt-2 pt-1.5 border-t border-white/5 flex items-center justify-between text-[10px]">
-                          {slide.chords ? (
-                            <span className="font-mono text-amber-300/90 truncate">
-                              ♪ {slide.chords}
-                            </span>
-                          ) : (
-                            <span className="text-slate-500 truncate">{slide.subtext || ''}</span>
-                          )}
-                          <span className="text-slate-500 font-mono">Key [{idx + 1}]</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                /* LIVE SERVICE: LIST VIEW (Stacked Rows for Fast Verse Scanning) */
-                <div className="space-y-2">
-                  {activeItem.slides.map((slide, idx) => {
-                    const isLive = idx === activeSlideIndex;
-                    const isNext = idx === activeSlideIndex + 1;
-                    const isEditingThis = quickEditSlideId === slide.id;
-
-                    return (
-                      <div
-                        key={slide.id}
-                        onClick={() => {
-                          if (!isEditingThis) setActiveSlideIndex(idx);
-                        }}
-                        className={`rounded-xl border-2 p-3 transition-all cursor-pointer flex items-center justify-between gap-4 ${
-                          isLive
-                            ? 'bg-emerald-950/40 border-emerald-400 ring-2 ring-emerald-500/30 shadow-md'
-                            : isNext
-                            ? 'bg-amber-950/20 border-amber-500/70 hover:border-amber-400'
-                            : 'bg-booth-900 border-booth-800 hover:border-booth-600'
-                        }`}
-                      >
-                        {/* Left column: Badge, Tag, Status */}
-                        <div className="flex items-center gap-2.5 shrink-0 w-36">
-                          <span
-                            className={`w-6 h-6 rounded flex items-center justify-center font-mono text-xs font-black ${
-                              isLive
-                                ? 'bg-emerald-400 text-black'
-                                : isNext
-                                ? 'bg-amber-500 text-black'
-                                : 'bg-booth-800 text-slate-300'
-                            }`}
-                          >
-                            {idx + 1}
-                          </span>
-                          <span
-                            className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase border ${getTagBadgeStyle(
-                              slide.tag
-                            )}`}
-                          >
-                            {slide.tag}
-                          </span>
-                          {isLive ? (
-                            <span className="px-1.5 py-0.5 rounded bg-emerald-500 text-black font-black text-[9px] uppercase tracking-wider flex items-center gap-1 shrink-0">
-                              <span className="w-1.5 h-1.5 rounded-full bg-black animate-ping" />
-                              ON AIR
-                            </span>
-                          ) : isNext ? (
-                            <span className="px-1.5 py-0.5 rounded bg-amber-500/30 text-amber-300 font-bold text-[9px] uppercase shrink-0">
-                              NEXT
-                            </span>
-                          ) : null}
-                        </div>
-
-                        {/* Center column: Lyrics lines + Chords */}
-                        <div className="flex-1 min-w-0">
-                          {isEditingThis ? (
-                            <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
-                              <textarea
-                                rows={2}
-                                value={quickEditText}
-                                onChange={(e) => setQuickEditText(e.target.value)}
-                                className="w-full bg-booth-950 border border-amber-400 rounded p-1.5 text-xs text-white focus:outline-none"
-                                autoFocus
-                              />
-                              <div className="flex justify-end gap-1.5">
-                                <button
-                                  onClick={() => setQuickEditSlideId(null)}
-                                  className="px-2 py-0.5 rounded bg-booth-800 text-[11px] text-slate-300"
-                                >
-                                  Cancel
-                                </button>
-                                <button
-                                  onClick={saveQuickEdit}
-                                  className="px-2.5 py-0.5 rounded bg-emerald-500 text-black font-bold text-[11px]"
-                                >
-                                  Save
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div>
-                              <p className="text-sm font-semibold text-slate-100 truncate">
-                                {slide.lines.join('  •  ')}
-                              </p>
-                              {slide.chords && (
-                                <p className="text-[11px] font-mono text-amber-300/90 mt-0.5 truncate">
-                                  ♪ {slide.chords}
-                                </p>
-                              )}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Right column: Edit + Live Switcher */}
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              startQuickEdit(slide);
-                            }}
-                            className="p-1.5 rounded hover:bg-booth-700 text-slate-400 hover:text-white"
-                            title="Quick-Edit Slide Live"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                          {isLive ? (
-                            <span className="px-3 py-1 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold text-xs">
-                              Active
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveSlideIndex(idx);
-                              }}
-                              className="px-3 py-1 rounded bg-booth-800 hover:bg-emerald-600 hover:text-white border border-booth-700 text-xs font-bold text-slate-200 transition"
-                            >
-                              Go Live
-                            </button>
-                          )}
-                          <span className="text-[10px] text-slate-500 font-mono w-12 text-right">
-                            [{idx + 1}]
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )
-            ) : (
-              /* SONG PREVIEW SLIDE DECK */
-              !previewSong ? (
-                <div className="h-full min-h-[300px] flex flex-col items-center justify-center p-8 text-center text-slate-500 space-y-3">
-                  <Music className="w-12 h-12 text-slate-600 mb-1" />
-                  <h3 className="text-base font-bold text-slate-300">
-                    No Song Selected for Preview
-                  </h3>
-                  <p className="text-xs text-slate-400 max-w-sm">
-                    Click any song in the Songs tab on the left to preview its verses, inspect chords, and test presentation flow before projecting.
-                  </p>
-                </div>
-              ) : slideDeckViewMode === 'grid' ? (
-                /* SONG PREVIEW: GRID VIEW */
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                  {previewSong.slides.map((slide, idx) => {
-                    const isPreviewed = idx === previewSlideIndex;
-
-                    return (
-                      <div
-                        key={slide.id}
-                        onClick={() => setPreviewSlideIndex(idx)}
-                        onDoubleClick={() => goLiveWithPreviewSong(idx)}
-                        className={`relative rounded-xl border-2 p-3 flex flex-col justify-between transition-all cursor-pointer min-h-[148px] ${
-                          isPreviewed
-                            ? 'bg-amber-950/30 border-amber-400 ring-4 ring-amber-500/30 shadow-xl'
-                            : 'bg-booth-900 border-booth-800 hover:border-booth-600'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-1 mb-2">
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className={`w-5 h-5 rounded-md flex items-center justify-center font-mono text-[11px] font-black ${
-                                isPreviewed
-                                  ? 'bg-amber-400 text-black'
-                                  : 'bg-booth-800 text-slate-400'
-                              }`}
-                            >
-                              {idx + 1}
-                            </span>
-                            <span
-                              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${getTagBadgeStyle(
-                                slide.tag
-                              )}`}
-                            >
-                              {slide.tag}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-1">
-                            {isPreviewed && (
-                              <span className="px-1.5 py-0.5 rounded bg-amber-500 text-black font-black text-[9px] uppercase tracking-wider">
-                                PREVIEW
-                              </span>
-                            )}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                goLiveWithPreviewSong(idx);
-                              }}
-                              className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-[10px] font-bold text-white flex items-center gap-1 shadow"
-                              title="Go live immediately with this verse"
-                            >
-                              <Play className="w-2.5 h-2.5 fill-current" />
-                              <span>Go Live</span>
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="my-auto space-y-1">
-                          {slide.lines.map((line, lIdx) => (
-                            <p
-                              key={lIdx}
-                              className={`text-xs leading-snug font-semibold ${
-                                isPreviewed ? 'text-amber-100' : 'text-slate-200'
-                              }`}
-                            >
-                              {line}
-                            </p>
-                          ))}
-                        </div>
-
-                        <div className="mt-2 pt-1.5 border-t border-white/5 flex items-center justify-between text-[10px]">
-                          {slide.chords ? (
-                            <span className="font-mono text-amber-300/90 truncate">
-                              ♪ {slide.chords}
-                            </span>
-                          ) : (
-                            <span className="text-slate-500 truncate">{slide.subtext || ''}</span>
-                          )}
-                          <span className="text-slate-400 text-[10px]">
-                            Double-click to Project
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                /* SONG PREVIEW: LIST VIEW (Stacked Rows for Fast Verse Scanning) */
-                <div className="space-y-2">
-                  {previewSong.slides.map((slide, idx) => {
-                    const isPreviewed = idx === previewSlideIndex;
-
-                    return (
-                      <div
-                        key={slide.id}
-                        onClick={() => setPreviewSlideIndex(idx)}
-                        onDoubleClick={() => goLiveWithPreviewSong(idx)}
-                        className={`rounded-xl border-2 p-3 transition-all cursor-pointer flex items-center justify-between gap-4 ${
-                          isPreviewed
-                            ? 'bg-amber-950/35 border-amber-400 ring-2 ring-amber-400/40 shadow-md'
-                            : 'bg-booth-900 border-booth-800 hover:border-booth-600'
-                        }`}
-                      >
-                        {/* Left column: Index + Tag + Preview badge */}
-                        <div className="flex items-center gap-2.5 shrink-0 w-36">
-                          <span
-                            className={`w-6 h-6 rounded flex items-center justify-center font-mono text-xs font-black ${
-                              isPreviewed
-                                ? 'bg-amber-400 text-black'
-                                : 'bg-booth-800 text-slate-300'
-                            }`}
-                          >
-                            {idx + 1}
-                          </span>
-                          <span
-                            className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase border ${getTagBadgeStyle(
-                              slide.tag
-                            )}`}
-                          >
-                            {slide.tag}
-                          </span>
-                          {isPreviewed && (
-                            <span className="px-1.5 py-0.5 rounded bg-amber-500 text-black font-black text-[9px] uppercase tracking-wider shrink-0">
-                              PREVIEW
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Center column: Full verse lines + Chords */}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-slate-100 truncate">
-                            {slide.lines.join('  •  ')}
-                          </p>
-                          {slide.chords && (
-                            <p className="text-[11px] font-mono text-amber-300/90 mt-0.5 truncate">
-                              ♪ {slide.chords}
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Right column: Action buttons */}
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPreviewSlideIndex(idx);
-                            }}
-                            className={`px-2.5 py-1 rounded text-xs font-bold border transition ${
-                              isPreviewed
-                                ? 'bg-amber-400 text-black border-amber-300'
-                                : 'bg-booth-800 hover:bg-booth-700 text-slate-200 border-booth-700'
-                            }`}
-                          >
-                            Preview
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              goLiveWithPreviewSong(idx);
-                            }}
-                            className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-xs font-black text-white flex items-center gap-1 shadow"
-                          >
-                            <Play className="w-3 h-3 fill-current" />
-                            <span>Go Live</span>
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )
-            )}
-          </div>
 
           {/* Bottom Dual Broadcast Monitors: LIVE PROGRAM OUTPUT vs NEXT CUED / SELECTED SONG PREVIEW */}
           <div className="h-60 bg-booth-900 border-t border-booth-800 p-3 grid grid-cols-2 gap-4 shrink-0">
@@ -3608,7 +3963,7 @@ const OperatorConsole: React.FC = () => {
             </div>
 
             {/* RIGHT MONITOR: SWITCHABLE BETWEEN CUED NEXT (IN LIVE MODE) OR SELECTED SONG PREVIEW (IN PREVIEW MODE) */}
-            {centerTab === 'preview' && previewSong ? (
+            {(centerLayoutMode === 'preview' || centerLayoutMode === 'side-by-side') && previewSong ? (
               <div className="flex flex-col min-h-0">
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-2">
@@ -4091,12 +4446,16 @@ const OperatorConsole: React.FC = () => {
                     onClick={() => {
                       if (contextMenu.category === 'songs') {
                         const toAdd = songs.filter((s) => selectedSongIds.includes(s.id));
-                        toAdd.forEach((s, i) => addSongToSchedule(s, i === toAdd.length - 1));
+                        if (toAdd.length > 0) {
+                          showSongOnLiveDirectly(toAdd[0], 0);
+                        }
                       } else if (contextMenu.category === 'scripture') {
                         const toAdd = filteredVerses.filter((v) =>
                           selectedVerseKeys.includes(getVerseKey(v))
                         );
-                        sendVerseListToSchedule(toAdd, true);
+                        if (toAdd.length > 0) {
+                          showScriptureOnLiveDirectly(toAdd, 0);
+                        }
                       } else if (contextMenu.category === 'media') {
                         const toAdd = mediaPool.filter((m) => selectedMediaIds.includes(m.id));
                         addMediaAssetsToSchedule(toAdd, true);
@@ -4111,22 +4470,63 @@ const OperatorConsole: React.FC = () => {
                 </>
               )}
 
-              {contextMenu.category === 'media' && selectedMediaIds.length === 1 && (
-                <button
-                  onClick={() => {
-                    const targetId = selectedMediaIds[0];
-                    setDefaultLogoMediaId((prev) => (prev === targetId ? '' : targetId));
-                    setContextMenu(null);
-                  }}
-                  className="w-full px-3 py-2 text-left hover:bg-booth-800 text-amber-300 font-bold flex items-center gap-2 border-t border-booth-800"
-                >
-                  <Star className="w-3.5 h-3.5 text-amber-400" />
-                  <span>
-                    {defaultLogoMediaId === selectedMediaIds[0]
-                      ? 'Clear Default Logo'
-                      : 'Set as Default Sanctuary Logo ([L])'}
-                  </span>
-                </button>
+              {contextMenu.category === 'media' && selectedMediaIds.length >= 1 && (
+                <>
+                  <button
+                    onClick={() => {
+                      const targetId = selectedMediaIds[0];
+                      setDefaultSongBackgroundId(targetId);
+                      applyBackgroundToSongs(targetId);
+                      setContextMenu(null);
+                    }}
+                    className="w-full px-3 py-2 text-left hover:bg-booth-800 text-sky-300 font-bold flex items-center gap-2 border-t border-booth-800"
+                  >
+                    <Music className="w-3.5 h-3.5 text-sky-400" />
+                    <span>Use as Background for Songs</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const targetId = selectedMediaIds[0];
+                      setDefaultScriptureBackgroundId(targetId);
+                      setContextMenu(null);
+                    }}
+                    className="w-full px-3 py-2 text-left hover:bg-booth-800 text-amber-300 font-bold flex items-center gap-2 border-t border-booth-800"
+                  >
+                    <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Use as Background for Bible Verses</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const targetId = selectedMediaIds[0];
+                      setDefaultSongBackgroundId(targetId);
+                      setDefaultScriptureBackgroundId(targetId);
+                      applyBackgroundToSongs(targetId);
+                      setContextMenu(null);
+                    }}
+                    className="w-full px-3 py-2 text-left hover:bg-booth-800 text-emerald-300 font-bold flex items-center gap-2 border-t border-booth-800"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Use as Background for Songs & Bible</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const targetId = selectedMediaIds[0];
+                      setDefaultLogoMediaId((prev) => (prev === targetId ? '' : targetId));
+                      setContextMenu(null);
+                    }}
+                    className="w-full px-3 py-2 text-left hover:bg-booth-800 text-amber-300 font-bold flex items-center gap-2 border-t border-booth-800"
+                  >
+                    <Star className="w-3.5 h-3.5 text-amber-400" />
+                    <span>
+                      {defaultLogoMediaId === selectedMediaIds[0]
+                        ? 'Clear Default Logo'
+                        : 'Set as Default Sanctuary Logo ([L])'}
+                    </span>
+                  </button>
+                </>
               )}
 
               {contextMenu.category !== 'scripture' && (
