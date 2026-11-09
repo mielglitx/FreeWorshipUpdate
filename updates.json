@@ -1,27 +1,40 @@
 {
-  "version": "1.1.3",
+  "version": "1.1.4",
   "releaseDate": "November 9, 2026",
   "author": "Amiel Yalung",
   "repository": "https://github.com/mielglitx/FreeWorshipUpdate",
   "windows": {
-    "version": "1.1.3",
+    "version": "1.1.4",
     "releaseDate": "November 9, 2026",
     "appName": "FreeWorship Studio (Windows)",
-    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.3/FreeWorship.Studio-Setup-1.1.3.exe",
+    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.4/FreeWorship.Studio-Setup-1.1.4.exe",
     "portableUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases",
-    "fileName": "FreeWorship Studio-Setup-1.1.3.exe",
-    "notes": "v1.1.3 update: Dedicated Song Preview section, Grid vs List View toggle for fast verse scanning, alphabetical song sorting, triple-layer data retention for user songs, and 20 classic hymns added."
+    "fileName": "FreeWorship Studio-Setup-1.1.4.exe",
+    "notes": "v1.1.4 update: Side-by-side Preview & Live view, ad-hoc double-click live projection without scheduling, instant live projection on preview slide click, media default backgrounds for songs & scriptures, and custom church logo upload in themes."
   },
   "android": {
-    "version": "1.1.3",
+    "version": "1.1.4",
     "releaseDate": "November 9, 2026",
     "appName": "FreeWorship Android Remote & 3rd Monitor",
-    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.3/FreeWorship-StageController.apk",
+    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.4/FreeWorship-StageController.apk",
     "fallbackDownloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/raw/main/FreeWorship-StageController.apk",
     "fileName": "FreeWorship-StageController.apk",
-    "notes": "v1.1.3 update: List view support, song previewing, built-in 20 classic hymns, and guaranteed user song library retention."
+    "notes": "v1.1.4 update: Side-by-side view support, double-click direct projection, and custom logo display."
   },
   "changelog": [
+    {
+      "version": "1.1.4",
+      "date": "November 9, 2026",
+      "platform": "Windows & Android",
+      "title": "Side-by-Side Dual View, Ad-hoc Live Projection on Double Click, Preview Slide Live Push, Media Default Backgrounds & Custom Logo Upload",
+      "highlights": [
+        "Ad-hoc Live Projection on Double Click: Double-clicking any song in the library or any Bible verse immediately projects it to the Live View and Sanctuary display without automatically adding it to the service schedule.",
+        "Side-by-Side Dual View: Center panel layout switcher featuring [🔴 Live View], [👁️ Preview], and [◫ Side-by-Side]. Side-by-side mode divides the workspace into a dual-deck layout with Preview Deck on the left and Live Deck on the right.",
+        "Instant Live Projection on Preview Slide Click: Clicking any slide in the preview deck immediately loads that song's full slides to Live and focuses directly on the selected slide with ON AIR status.",
+        "Media Background Defaults for Songs & Bible: Right-clicking any media item gives dedicated options to use as background for songs, for Bible verses, or both.",
+        "Custom Church Logo Upload: Themes tab now includes a custom logo file upload (PNG, JPG, SVG, WEBP with transparency support) with real-time thumbnail preview, Change and Remove buttons, active during sanctuary blackout / [L] splash screen."
+      ]
+    },
     {
       "version": "1.1.3",
       "date": "November 9, 2026",

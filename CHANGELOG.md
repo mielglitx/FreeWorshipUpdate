@@ -4,6 +4,33 @@ All notable changes to the **FreeWorship Studio** (Windows Desktop Presentation 
 
 ---
 
+## [1.1.4] — November 9, 2026
+
+### 🚀 Highlights & Major Features
+- **Ad-hoc Live Projection on Double Click**:
+  - Double-clicking any song card in the Songs library or any scripture verse in the Bible list immediately projects it directly to the Live View and Sanctuary display output.
+  - Does **not** alter, modify, or add items to the Service Schedule. Service Schedule Run-of-Show remains strictly user-controlled via the `+ Schedule` button or drag-and-drop.
+- **Side-by-Side Dual View (Preview & Live Deck)**:
+  - Center panel header now offers a persistent 3-mode switcher:
+    - **`[🔴 Live View]`**: Shows full-width Live Service controls and active slide deck.
+    - **`[👁️ Preview]`**: Shows full-width Song Preview inspection deck.
+    - **`[◫ Side-by-Side]`**: Splits the workspace into two independent responsive columns with the **Preview Deck** on the left and the **Live Deck** on the right.
+  - Operators can view and control both live output and upcoming songs simultaneously.
+- **Instant Live Projection on Preview Slide Click**:
+  - Clicking any slide or section jump pill (e.g. *Verse 2*, *Chorus*) in the Preview Deck immediately loads that song's full slides to Live and focuses directly on the selected slide with `ON AIR` status.
+- **Media Background Defaults for Songs and Bible Verses**:
+  - Added right-click context menu options in the Media tab:
+    - `Use as Background for Songs`: Automatically sets default motion/still background for all songs.
+    - `Use as Background for Bible Verses`: Sets default background for scripture readings.
+    - `Use as Background for Songs & Bible`: Sets both in a single click.
+    - `Set as Default Sanctuary Logo ([L])`: Sets the default pre-service / blackout loop.
+- **Custom Ministry / Church Logo Upload in Themes**:
+  - In the Themes tab under **`Sanctuary Logo & Splash Screen ([L] Key)`**, users can now upload their own custom church logo file (PNG, JPG, SVG, WEBP with full transparency support).
+  - Features real-time thumbnail preview, `Change Logo`, and `Remove` controls.
+  - Renders at maximum resolution during sanctuary blackout, pre-service announcements, or whenever the `[L]` key is pressed.
+
+---
+
 ## [1.1.3] — November 9, 2026
 
 ### 🚀 Highlights & Major Features
