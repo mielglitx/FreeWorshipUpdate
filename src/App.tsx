@@ -2728,46 +2728,46 @@ const OperatorConsole: React.FC = () => {
       />
 
       {/* =====================================================================
-          TOP COMMAND BAR: Branding, Multi-Screen Launchers, and PANIC BUTTONS
+          TOP COMMAND BAR: Branding, Multi-Screen Launchers, and PANIC BUTTONS (Compact 50-80% Scale)
          ===================================================================== */}
-      <header className="h-16 bg-booth-900 border-b border-booth-800 px-4 flex items-center justify-between gap-4 shrink-0">
+      <header className="h-12 bg-booth-900 border-b border-booth-800 px-3 flex items-center justify-between gap-2 shrink-0">
         {/* Left: App Identity & Live Status */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
-            <Sparkles className="w-5 h-5 text-black" />
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-md shadow-amber-500/20">
+            <Sparkles className="w-3.5 h-3.5 text-black" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="font-display font-black tracking-tight text-lg text-white">
+            <div className="flex items-center gap-1.5">
+              <span className="font-display font-black tracking-tight text-sm text-white">
                 FREE<span className="text-amber-400">WORSHIP</span>
               </span>
-              <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-widest rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+              <span className="px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                LIVE ENGINE READY
+                LIVE
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 hidden sm:block">
-              Zero-Latency Multi-Monitor Worship & Broadcast Presentation Suite
+            <p className="text-[10px] text-slate-400 hidden 2xl:block leading-none">
+              Multi-Monitor Worship Suite
             </p>
           </div>
         </div>
 
-        {/* Center: EMERGENCY PANIC BUTTONS (Huge Hit Targets for Volunteers) */}
-        <div className="flex items-center gap-2 bg-booth-950 p-1.5 rounded-xl border border-booth-800">
+        {/* Center: EMERGENCY PANIC BUTTONS (Compact 60% Scale) */}
+        <div className="flex items-center gap-1 bg-booth-950 p-1 rounded-lg border border-booth-800 shrink-0">
           <button
             onClick={() =>
               setPanic((prev) => ({ ...prev, blackout: !prev.blackout, logoMode: false }))
             }
             title="Shortcut: [B] — Instantly blacks out the main projector output"
-            className={`px-4 py-2 rounded-lg font-black text-xs uppercase tracking-wider flex items-center gap-2 transition-all ${
+            className={`px-2.5 py-1 rounded-md font-bold text-[11px] uppercase tracking-wide flex items-center gap-1.5 transition-all ${
               panic.blackout
-                ? 'bg-red-600 text-white shadow-lg shadow-red-600/40 ring-2 ring-red-300 animate-pulse'
+                ? 'bg-red-600 text-white shadow-md shadow-red-600/40 ring-1 ring-red-300 animate-pulse'
                 : 'bg-booth-850 hover:bg-booth-800 text-slate-200 border border-booth-700'
             }`}
           >
-            <EyeOff className="w-4 h-4" />
+            <EyeOff className="w-3.5 h-3.5" />
             <span>Blackout</span>
-            <kbd className="px-1.5 py-0.5 text-[10px] rounded bg-black/40 text-slate-300">B</kbd>
+            <kbd className="px-1 py-0.2 text-[9px] font-mono rounded bg-black/40 text-slate-300">B</kbd>
           </button>
 
           <button
@@ -2775,65 +2775,65 @@ const OperatorConsole: React.FC = () => {
               setPanic((prev) => ({ ...prev, logoMode: !prev.logoMode, blackout: false }))
             }
             title="Shortcut: [L] — Switches display to Sanctuary Logo & Background Loop"
-            className={`px-4 py-2 rounded-lg font-black text-xs uppercase tracking-wider flex items-center gap-2 transition-all ${
+            className={`px-2.5 py-1 rounded-md font-bold text-[11px] uppercase tracking-wide flex items-center gap-1.5 transition-all ${
               panic.logoMode
-                ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/40 ring-2 ring-amber-200'
+                ? 'bg-amber-500 text-black shadow-md shadow-amber-500/40 ring-1 ring-amber-200'
                 : 'bg-booth-850 hover:bg-booth-800 text-slate-200 border border-booth-700'
             }`}
           >
-            <Sparkles className="w-4 h-4" />
+            <Sparkles className="w-3.5 h-3.5" />
             <span>Logo</span>
-            <kbd className="px-1.5 py-0.5 text-[10px] rounded bg-black/40 text-slate-300">L</kbd>
+            <kbd className="px-1 py-0.2 text-[9px] font-mono rounded bg-black/40 text-slate-300">L</kbd>
           </button>
 
           <button
             onClick={() => setPanic((prev) => ({ ...prev, clearText: !prev.clearText }))}
             title="Shortcut: [C] — Clears lyrics while keeping the motion background playing"
-            className={`px-4 py-2 rounded-lg font-black text-xs uppercase tracking-wider flex items-center gap-2 transition-all ${
+            className={`px-2.5 py-1 rounded-md font-bold text-[11px] uppercase tracking-wide flex items-center gap-1.5 transition-all ${
               panic.clearText
-                ? 'bg-sky-500 text-black shadow-lg shadow-sky-500/40 ring-2 ring-sky-200'
+                ? 'bg-sky-500 text-black shadow-md shadow-sky-500/40 ring-1 ring-sky-200'
                 : 'bg-booth-850 hover:bg-booth-800 text-slate-200 border border-booth-700'
             }`}
           >
-            <Type className="w-4 h-4" />
+            <Type className="w-3.5 h-3.5" />
             <span>Clear Text</span>
-            <kbd className="px-1.5 py-0.5 text-[10px] rounded bg-black/40 text-slate-300">C</kbd>
+            <kbd className="px-1 py-0.2 text-[9px] font-mono rounded bg-black/40 text-slate-300">C</kbd>
           </button>
 
           {(panic.blackout || panic.logoMode || panic.clearText) && (
             <button
               onClick={() => setPanic({ blackout: false, logoMode: false, clearText: false })}
-              className="px-3 py-2 rounded-lg font-bold text-xs bg-emerald-600 hover:bg-emerald-500 text-white"
+              className="px-2 py-1 rounded-md font-bold text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white"
             >
               Restore [Esc]
             </button>
           )}
         </div>
 
-        {/* Right: Multi-Display Output Launchers (Projector, Stage Monitor, NDI/OBS Stream & Display Settings) */}
-        <div className="flex items-center gap-2">
+        {/* Right: Multi-Display Output Launchers (Compact 50-70% Scale) */}
+        <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={() => openExternalDisplayWindow('projector', routingSettings)}
-            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/25 transition"
+            className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] flex items-center gap-1 shadow transition"
             title="Launch borderless fullscreen Projector Output directly onto Screen 2"
           >
-            <Monitor className="w-4 h-4" />
-            <span>Launch 2nd Screen (Projector)</span>
+            <Monitor className="w-3.5 h-3.5" />
+            <span>2nd Screen</span>
           </button>
 
-          <div className="flex items-center rounded-xl border border-amber-500/40 bg-booth-850 overflow-hidden">
+          <div className="flex items-center rounded-lg border border-amber-500/40 bg-booth-850 overflow-hidden">
             <button
               onClick={() => openExternalDisplayWindow('stage', routingSettings)}
               disabled={routingSettings.enableStageMonitor === false}
-              className="px-3 py-2 hover:bg-booth-700 disabled:opacity-40 disabled:pointer-events-none text-amber-300 font-bold text-xs flex items-center gap-1.5 transition"
+              className="px-2 py-1 hover:bg-booth-700 disabled:opacity-40 disabled:pointer-events-none text-amber-300 font-bold text-[11px] flex items-center gap-1 transition"
               title={
                 routingSettings.enableStageMonitor === false
                   ? 'Desktop 3rd Screen is disabled (click ON/OFF toggle to enable)'
                   : 'Launch borderless fullscreen Stage Confidence Monitor directly onto Screen 3'
               }
             >
-              <Tv className="w-4 h-4" />
-              <span>Launch 3rd Screen (Stage)</span>
+              <Tv className="w-3.5 h-3.5" />
+              <span>3rd Screen</span>
             </button>
             <button
               onClick={() =>
@@ -2842,7 +2842,7 @@ const OperatorConsole: React.FC = () => {
                   enableStageMonitor: routingSettings.enableStageMonitor === false ? true : false,
                 })
               }
-              className={`px-2 py-2 text-[10px] font-black uppercase border-l border-booth-700 transition ${
+              className={`px-1.5 py-1 text-[9px] font-black uppercase border-l border-booth-700 transition ${
                 routingSettings.enableStageMonitor !== false
                   ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30'
                   : 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
@@ -2858,37 +2858,32 @@ const OperatorConsole: React.FC = () => {
               setDisplaySettingsTab('screens');
               setDisplaySettingsOpen(true);
             }}
-            className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-black text-xs flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition"
+            className="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-black text-[11px] flex items-center gap-1 shadow transition"
             title="Configure 2nd & 3rd Monitor Routing, Fonts, Word Wrapping, and Text Boundary Box"
           >
-            <Sliders className="w-4 h-4" />
-            <span>Display & Boundary Settings</span>
+            <Sliders className="w-3.5 h-3.5" />
+            <span>Displays</span>
           </button>
 
           <button
             onClick={() => setImportExportModalOpen(true)}
-            className="px-3 py-2 rounded-xl bg-booth-800 hover:bg-booth-700 text-emerald-300 border border-emerald-500/40 font-bold text-xs flex items-center gap-1.5 transition"
+            className="px-2 py-1 rounded-lg bg-booth-800 hover:bg-booth-700 text-emerald-300 border border-emerald-500/40 font-bold text-[11px] flex items-center gap-1 transition"
             title="Import or Export Songs, 66-Book Bibles, Service Schedules, and Display/Boundary Settings"
           >
-            <Database className="w-4 h-4" />
-            <span>Import / Export</span>
+            <Database className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Import/Export</span>
           </button>
 
           <button
             onClick={() => setLanRemoteModalOpen(true)}
-            className="px-3 py-2 rounded-xl bg-booth-850 hover:bg-booth-800 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center gap-1.5 transition shadow"
-            title="Android 3rd Monitor & Remote Controller Wi-Fi Connection Details"
+            className="px-2 py-1 rounded-lg bg-booth-850 hover:bg-booth-800 border border-amber-500/40 text-amber-300 font-bold text-[11px] flex items-center gap-1 transition shadow"
+            title={`Android 3rd Monitor & Remote Controller Wi-Fi Connection Details${headerLanIp ? ` (${headerLanIp})` : ''}`}
           >
-            <Smartphone className="w-4 h-4 text-amber-400" />
-            <span>Android Remote</span>
-            {headerLanIp && (
-              <span className="font-mono text-[10px] text-slate-400 hidden xl:inline">
-                ({headerLanIp})
-              </span>
-            )}
+            <Smartphone className="w-3.5 h-3.5 text-amber-400" />
+            <span>Remote</span>
             {headerConnectedClients > 0 && (
               <span
-                className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"
+                className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"
                 title={`${headerConnectedClients} Android device(s) connected`}
               />
             )}
@@ -2896,41 +2891,41 @@ const OperatorConsole: React.FC = () => {
 
           <button
             onClick={() => openExternalDisplayWindow('stream', routingSettings)}
-            className="px-3 py-2 rounded-xl bg-booth-800 hover:bg-booth-700 text-sky-300 border border-sky-500/40 font-bold text-xs flex items-center gap-1.5 transition"
+            className="px-2 py-1 rounded-lg bg-booth-800 hover:bg-booth-700 text-sky-300 border border-sky-500/40 font-bold text-[11px] flex items-center gap-1 transition"
             title="Open Transparent Lower-Thirds Overlay for OBS / vMix / NDI"
           >
-            <Radio className="w-4 h-4" />
-            <span className="hidden 2xl:inline">OBS</span>
+            <Radio className="w-3.5 h-3.5" />
+            <span>OBS</span>
           </button>
 
           {/* App UI Color Theme Selector (Light, Gray, Dark Gray, Dark) */}
           <select
             value={uiColorTheme}
             onChange={(e) => setUiColorTheme(e.target.value as UiColorTheme)}
-            className="px-2.5 py-2 bg-booth-850 hover:bg-booth-800 text-slate-200 border border-booth-700 font-bold text-xs focus:outline-none cursor-pointer"
+            className="px-1.5 py-1 bg-booth-850 hover:bg-booth-800 text-slate-200 border border-booth-700 font-bold text-[10px] rounded-lg focus:outline-none cursor-pointer"
             title="Switch App UI Color Theme (Light, Gray, Dark Gray, Dark)"
           >
-            <option value="dark">Theme: Dark</option>
-            <option value="dark-gray">Theme: Dark Gray</option>
-            <option value="gray">Theme: Gray</option>
-            <option value="light">Theme: Light</option>
+            <option value="dark">Dark</option>
+            <option value="dark-gray">Dark Gray</option>
+            <option value="gray">Gray</option>
+            <option value="light">Light</option>
           </select>
 
           <button
             onClick={() => setShowWelcomeModal(true)}
-            className="px-2.5 py-2 rounded-xl bg-booth-850 hover:bg-booth-800 text-amber-300 border border-amber-500/40 font-bold text-xs flex items-center gap-1.5 transition"
+            className="px-2 py-1 rounded-lg bg-booth-850 hover:bg-booth-800 text-amber-300 border border-amber-500/40 font-bold text-[11px] flex items-center gap-1 transition"
             title="About FreeWorship, Version Updates & GCash Donation Info"
           >
-            <Heart className="w-3.5 h-3.5 text-amber-400" />
+            <Heart className="w-3 h-3 text-amber-400" />
             <span className="hidden xl:inline">About</span>
           </button>
 
           <button
             onClick={() => setShowShortcutsModal(true)}
-            className="p-2 rounded-xl bg-booth-850 hover:bg-booth-800 text-slate-300 border border-booth-700"
+            className="p-1 rounded-lg bg-booth-850 hover:bg-booth-800 text-slate-300 border border-booth-700"
             title="Keyboard Shortcuts & Booth Guide"
           >
-            <HelpCircle className="w-4 h-4" />
+            <HelpCircle className="w-3.5 h-3.5" />
           </button>
         </div>
       </header>
