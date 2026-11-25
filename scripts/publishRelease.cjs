@@ -28,21 +28,23 @@ if (!token) {
 
 const REPO_OWNER = 'mielglitx';
 const REPO_NAME = 'FreeWorshipUpdate';
-const TAG_NAME = 'v1.1.7';
-const RELEASE_TITLE = 'FreeWorship v1.1.7 - Bulletproof Android ↔ Windows LAN Sync, Wi-Fi Auto-Discovery & Network Security Config';
+const TAG_NAME = 'v1.1.8';
+const RELEASE_TITLE = 'FreeWorship v1.1.8 - VS Code Titlebar, QR Android Setup, Firewall Helper, UDP Discovery & Live Guided Tour';
 
-const RELEASE_BODY = `## FreeWorship v1.1.7 Update
+const RELEASE_BODY = `## FreeWorship v1.1.8 Update
 
 ### 🚀 Highlights & Major Features
-- **Android Cleartext Traffic & Security Config**: Added explicit Android network security configuration (\`network_security_config.xml\`) and WebView Mixed Content Mode (\`MIXED_CONTENT_ALWAYS_ALLOW\`), completely resolving the Android 9+ system-level silent blocking of local HTTP connections.
-- **Native Wi-Fi Subnet Detection & Zero-Guesswork Auto-Discovery**: Android app now uses a native network plugin to read the device's actual Wi-Fi IPv4 address directly from the hardware network interface (detecting subnets like TP-Link Deco \`192.168.68.x\`, PLDT \`192.168.254.x\` / \`192.168.1.x\`, Globe \`192.168.100.x\`, mobile hotspots, etc.), concurrently scanning both ports 5174 and 5173 with priority DHCP ranges in under 2 seconds.
-- **Dual-Port Windows LAN Server (5174 & 5173) & Resilient Host Normalization**: Windows desktop app now listens simultaneously on port 5174 and alias port 5173 with universal CORS headers (\`*\`). Manual IP connection now automatically normalizes raw IPs, full URLs (e.g. \`http://.../api/lan-sync\`), and missing ports with instant visual status feedback ("Connecting...", "Connected!", or diagnostics).
-- **Operator Android Remote Header Bar & Windows Firewall Helper**: Added an "Android Remote" button in the Windows top header displaying the active LAN IP (e.g. \`192.168.68.130:5174\`) and connected device count with 1-click copy, connection guide, and a 1-click Windows Firewall rule helper.
+- **Interactive On-Interface Guided Tour & Natural Voice-Over**: Open \`Help > How to Use\` and start the live spotlight tour directly on the FreeWorship interface (both PC desktop and Android simulator), complete with 15 natural voice-over clips.
+- **Top-Bar Android APK Button & Offline QR Code Download**: Access the Android installer directly from the top bar and scan the offline QR code on your phone to download \`FreeWorship-StageController.apk\` over local Wi-Fi.
+- **Windows Firewall Helper with Live Status Check**: One-click UAC-elevated firewall setup for TCP ports \`5174, 5173\` and UDP port \`41234\` with automatic green **"Already Allowed"** verification.
+- **UDP Broadcast + Native Multi-Threaded PC Discovery**: Fast, reliable Android auto-discovery across local Wi-Fi routers and hotspots with live connection notifications on both PC and Android.
+- **Remote Android Upgrades**: Dynamic built-in Bible loading, custom song authoring from Android, synced translations, and focused \`ON AIR\`-only slide highlighting.
+- **Official Logo Branding, 2nd Monitor Titles & VS Code Titlebar**: Integrated FreeWorship emblem across app/splash/icons, projector/live song & scripture title overlays, and sleek 36px desktop menu bar (\`File\`, \`Output\`, \`View\`, \`Tools\`, \`Help\`).
 
 ### 📥 Direct Downloads
-- **Windows Setup Installer**: [FreeWorship Studio-Setup-1.1.7.exe](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.7/FreeWorship.Studio-Setup-1.1.7.exe)
-- **Windows Portable**: [FreeWorship Studio-Portable-1.1.7.exe](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.7/FreeWorship.Studio-Portable-1.1.7.exe)
-- **Android Remote APK**: [FreeWorship-StageController.apk](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.7/FreeWorship-StageController.apk)
+- **Windows Setup Installer**: [FreeWorship-Studio-Setup-1.1.8.exe](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.8/FreeWorship-Studio-Setup-1.1.8.exe)
+- **Windows Portable**: [FreeWorship-Studio-Portable-1.1.8.exe](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.8/FreeWorship-Studio-Portable-1.1.8.exe)
+- **Android Remote APK**: [FreeWorship-StageController.apk](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.8/FreeWorship-StageController.apk)
 `;
 
 function request(options, data) {
@@ -170,13 +172,13 @@ async function main() {
   const existingAssets = release.assets || [];
   const filesToUpload = [
     {
-      filePath: path.resolve(__dirname, '../release/FreeWorship Studio-Setup-1.1.7.exe'),
-      name: 'FreeWorship.Studio-Setup-1.1.7.exe',
+      filePath: path.resolve(__dirname, '../release/FreeWorship Studio-Setup-1.1.8.exe'),
+      name: 'FreeWorship-Studio-Setup-1.1.8.exe',
       contentType: 'application/vnd.microsoft.portable-executable',
     },
     {
-      filePath: path.resolve(__dirname, '../release/FreeWorship Studio-Portable-1.1.7.exe'),
-      name: 'FreeWorship.Studio-Portable-1.1.7.exe',
+      filePath: path.resolve(__dirname, '../release/FreeWorship Studio-Portable-1.1.8.exe'),
+      name: 'FreeWorship-Studio-Portable-1.1.8.exe',
       contentType: 'application/vnd.microsoft.portable-executable',
     },
     {

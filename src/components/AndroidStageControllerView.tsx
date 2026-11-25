@@ -1,11 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Clock,
   Eye,
   EyeOff,
+  HelpCircle,
   Image as ImageIcon,
   Layers,
   ListMusic,
@@ -21,6 +23,7 @@ import {
   Trash2,
   Wifi,
   WifiOff,
+  X,
 } from 'lucide-react';
 import { LiveBroadcastPayload, RemoteControlAction, Slide } from '../types/worship';
 import {
@@ -37,6 +40,12 @@ import {
 } from '../data/defaultData';
 import { BIBLE_BOOKS_66 } from '../services/bibleImporter';
 import { WelcomeAboutModal } from './SystemModals';
+import { HowToUseModal } from './HowToUseModal';
+import {
+  ANDROID_LIVE_TOUR_STEPS,
+  LiveInterfaceTourOverlay,
+  LiveTourStep,
+} from './LiveInterfaceTourOverlay';
 
 const SAVED_HOST_KEY = 'freeworship_android_host_url_v1';
 
@@ -125,7 +134,10 @@ export const AndroidStageControllerView: React.FC = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgressText, setScanProgressText] = useState<string>('');
   const [connectionNotice, setConnectionNotice] = useState<string>('');
-  const [lastSyncTime, setLastSyncTime] = useState<number>(0);
+  const [connectedToast, setConnectedToast] = useState<{ host: string; id: number } | null>(null);
+  const lastSyncTimeRef = useRef<number>(0);
+  const wasConnectedRef = useRef<boolean>(false);
+  const connectedToastTimerRef = useRef<number | null>(null);
   const [layoutMode, setLayoutMode] = useState<AndroidLayoutMode>('split');
   const [controllerTab, setControllerTab] = useState<
     'slides' | 'schedule' | 'add-item' | 'stage-tools'
@@ -136,12 +148,27 @@ export const AndroidStageControllerView: React.FC = () => {
 
   // Android Remote Add Song / Bible Verse State
   const [songSearchQuery, setSongSearchQuery] = useState<string>('');
+  const [showNewSongCreator, setShowNewSongCreator] = useState<boolean>(false);
+  const [newSongTitle, setNewSongTitle] = useState<string>('');
+  const [newSongKey, setNewSongKey] = useState<string>('G');
+  const [newSongLyrics, setNewSongLyrics] = useState<string>('');
   const [remoteBibleTranslation, setRemoteBibleTranslation] = useState<string>('KJV');
   const [remoteBibleBook, setRemoteBibleBook] = useState<string>('John');
   const [remoteBibleChapter, setRemoteBibleChapter] = useState<number>(3);
   const [remoteBibleVerseRange, setRemoteBibleVerseRange] = useState<string>('16');
   const [remoteBibleQuickRef, setRemoteBibleQuickRef] = useState<string>('');
   const [remoteActionNotice, setRemoteActionNotice] = useState<string>('');
+
+  const showSuccessConnectionToast = (hostLabel: string) => {
+    const clean = hostLabel.replace(/^https?:\/\//, '');
+    if (connectedToastTimerRef.current) {
+      window.clearTimeout(connectedToastTimerRef.current);
+    }
+    setConnectedToast({ host: clean, id: Date.now() });
+    connectedToastTimerRef.current = window.setTimeout(() => {
+      setConnectedToast(null);
+    }, 5000);
+  };
   const [uiColorTheme, setUiColorTheme] = useState<'dark' | 'dark-gray' | 'gray' | 'light'>(() => {
     try {
       const saved = localStorage.getItem('freeworship_ui_color_theme_v1') as
@@ -158,6 +185,8 @@ export const AndroidStageControllerView: React.FC = () => {
   });
 
   const [showAboutModal, setShowAboutModal] = useState(false);
+  const [showHowToUseModal, setShowHowToUseModal] = useState(false);
+  const [showAndroidLiveTour, setShowAndroidLiveTour] = useState(false);
 
   useEffect(() => {
     try {
@@ -228,16 +257,21 @@ export const AndroidStageControllerView: React.FC = () => {
   useEffect(() => {
     return liveSyncBus.subscribe((incoming) => {
       setPayload(incoming);
+      if (!wasConnectedRef.current) {
+        wasConnectedRef.current = true;
+        showSuccessConnectionToast('Local Windows Studio');
+      }
       setIsConnected(true);
-      setLastSyncTime(Date.now());
+      lastSyncTimeRef.current = Date.now();
     });
   }, []);
 
-  // Poll Windows Host over LAN Wi-Fi every 200ms (automatically tries port 5174 & 5173)
+  // Poll Windows Host over LAN Wi-Fi every 220ms (automatically tries port 5174 & 5173)
   useEffect(() => {
     let active = true;
     const poll = async () => {
       if (!activeHost) return;
+      let resolvedHost = activeHost;
       let remoteState = await fetchRemoteStateFromHost(activeHost, 'Android-3rdMonitor-APK', 1200);
       if (!remoteState) {
         const normalized = normalizeHostUrl(activeHost);
@@ -247,6 +281,7 @@ export const AndroidStageControllerView: React.FC = () => {
         const altState = await fetchRemoteStateFromHost(alt, 'Android-3rdMonitor-APK', 1000);
         if (altState) {
           remoteState = altState;
+          resolvedHost = alt;
           setActiveHost(alt);
           const clean = alt.replace(/^https?:\/\//, '');
           setHostInput(clean);
@@ -258,10 +293,15 @@ export const AndroidStageControllerView: React.FC = () => {
       if (!active) return;
       if (remoteState) {
         setPayload(remoteState);
+        lastSyncTimeRef.current = Date.now();
+        if (!wasConnectedRef.current) {
+          wasConnectedRef.current = true;
+          showSuccessConnectionToast(resolvedHost);
+        }
         setIsConnected(true);
-        setLastSyncTime(Date.now());
       } else {
-        if (Date.now() - lastSyncTime > 3000) {
+        if (Date.now() - lastSyncTimeRef.current > 3500) {
+          wasConnectedRef.current = false;
           setIsConnected(false);
         }
       }
@@ -273,11 +313,11 @@ export const AndroidStageControllerView: React.FC = () => {
       active = false;
       window.clearInterval(interval);
     };
-  }, [activeHost, lastSyncTime]);
+  }, [activeHost]);
 
-  const connectToHost = async (target: string) => {
+  const connectToHost = async (target: string): Promise<boolean> => {
     const cleaned = target.trim();
-    if (!cleaned) return;
+    if (!cleaned) return false;
     setConnectionNotice(`Connecting to ${cleaned}...`);
     const norm = normalizeHostUrl(cleaned);
     const hostDisplay = norm.replace(/^https?:\/\//, '');
@@ -290,10 +330,13 @@ export const AndroidStageControllerView: React.FC = () => {
     const state = await fetchRemoteStateFromHost(norm, 'Android-3rdMonitor-APK', 1500);
     if (state) {
       setPayload(state);
+      lastSyncTimeRef.current = Date.now();
+      wasConnectedRef.current = true;
       setIsConnected(true);
-      setLastSyncTime(Date.now());
+      showSuccessConnectionToast(hostDisplay);
       setConnectionNotice(`Connected to ${hostDisplay}`);
-      setTimeout(() => setConnectionNotice(''), 3000);
+      setTimeout(() => setConnectionNotice(''), 3500);
+      return true;
     } else {
       const altNorm = norm.includes(':5174')
         ? norm.replace(':5174', ':5173')
@@ -305,18 +348,23 @@ export const AndroidStageControllerView: React.FC = () => {
       const altState = await fetchRemoteStateFromHost(altNorm, 'Android-3rdMonitor-APK', 1500);
       if (altState) {
         setPayload(altState);
+        lastSyncTimeRef.current = Date.now();
+        wasConnectedRef.current = true;
         setIsConnected(true);
-        setLastSyncTime(Date.now());
         setActiveHost(altNorm);
         setHostInput(altDisplay);
         try {
           localStorage.setItem(SAVED_HOST_KEY, altDisplay);
         } catch {}
+        showSuccessConnectionToast(altDisplay);
         setConnectionNotice(`Connected to ${altDisplay}`);
-        setTimeout(() => setConnectionNotice(''), 3000);
+        setTimeout(() => setConnectionNotice(''), 3500);
+        return true;
       } else {
+        wasConnectedRef.current = false;
         setIsConnected(false);
         setConnectionNotice(`Could not reach PC at ${hostDisplay}. Check Wi-Fi & Firewall.`);
+        return false;
       }
     }
   };
@@ -324,51 +372,72 @@ export const AndroidStageControllerView: React.FC = () => {
   // Auto-scan subnet for Windows PC running FreeWorship
   const handleAutoScanWifi = async () => {
     setIsScanning(true);
-    setScanProgressText('Checking Wi-Fi...');
+    setScanProgressText('Scanning Wi-Fi...');
     setConnectionNotice('');
+    let detectedPhoneIp: string | null = null;
     try {
-      const prefixSet = new Set<string>();
+      // 1. Try Native Android Java Multi-threaded + UDP Broadcast Discovery first (fast & immune to WebView limits)
+      const apkUpdater = (window as any).Capacitor?.Plugins?.ApkUpdater;
+      if (apkUpdater && typeof apkUpdater.scanForPcHosts === 'function') {
+        try {
+          const nativeIpQuick = await getNativeDeviceWifiIp();
+          if (nativeIpQuick) {
+            detectedPhoneIp = nativeIpQuick;
+            setScanProgressText(`Scanning ${nativeIpQuick.split('.').slice(0, 3).join('.')}.x...`);
+          }
+          const nativeRes = await apkUpdater.scanForPcHosts({ preferredHost: hostInput });
+          if (nativeRes?.deviceWifiIp) {
+            detectedPhoneIp = nativeRes.deviceWifiIp;
+          }
+          if (nativeRes?.foundHost) {
+            const connected = await connectToHost(nativeRes.foundHost);
+            if (connected) {
+              setScanProgressText(`Found ${nativeRes.foundHost}!`);
+              return;
+            }
+          }
+        } catch {}
+      }
 
-      // 1. Device's own Wi-Fi IP directly from Android native network interface (zero-guesswork)
-      const nativeIp = await getNativeDeviceWifiIp();
+      // 2. Web / fallback scanner
+      const prefixSet = new Set<string>();
+      const nativeIp = detectedPhoneIp || (await getNativeDeviceWifiIp());
       if (nativeIp) {
+        detectedPhoneIp = nativeIp;
         const nativeMatch = nativeIp.match(/^(\d+\.\d+\.\d+)\.\d+$/);
         if (nativeMatch && nativeMatch[1]) {
           prefixSet.add(nativeMatch[1]);
         }
       }
 
-      // 2. Check WebRTC ICE host candidates for the Android device's local subnet
       const rtcPrefixes = await detectLocalSubnetPrefix();
       rtcPrefixes.forEach((p) => prefixSet.add(p));
 
-      // 3. Check current hostInput prefix if user typed or saved an IP previously
       const ipMatch = hostInput.match(/(\d+\.\d+\.\d+)\.\d+/);
       if (ipMatch && ipMatch[1]) {
         prefixSet.add(ipMatch[1]);
       }
 
-      // 4. Common Philippine & church router subnets
       [
-        '192.168.68', // TP-Link Deco Mesh Wi-Fi
-        '192.168.1',  // PLDT / Globe / Linksys
-        '192.168.0',  // D-Link / Netgear / TP-Link
-        '192.168.254',// PLDT Home Fibr
-        '192.168.100',// Globe At Home Fiber
-        '192.168.8',  // Huawei / Converge
-        '192.168.18', // Fiberhome / SkyFiber
-        '192.168.50', // Asus RT routers
-        '192.168.2',  // SMB routers
+        '192.168.1',
+        '192.168.0',
+        '192.168.68',
+        '192.168.254',
+        '192.168.100',
+        '192.168.8',
+        '192.168.18',
+        '192.168.50',
+        '192.168.2',
         '192.168.3',
-        '192.168.43', // Android Hotspot
-        '172.20.10',  // iOS Hotspot
+        '192.168.43',
+        '172.20.10',
         '10.0.0',
         '10.0.1',
       ].forEach((p) => prefixSet.add(p));
 
       const prefixes = Array.from(prefixSet);
 
-      const probeHost = async (ipPort: string, timeoutMs = 500): Promise<string | null> => {
+      const probeHost = async (ipPort: string, timeoutMs = 850): Promise<string | null> => {
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), timeoutMs);
         try {
@@ -387,21 +456,18 @@ export const AndroidStageControllerView: React.FC = () => {
         return null;
       };
 
-      // Quick probe of currently entered host on both port 5174 (Windows .exe) and 5173 (Dev)
       const cleanCurrentIp = hostInput.replace(/^https?:\/\//, '').split(':')[0].split('/')[0];
       if (cleanCurrentIp && /^\d+\.\d+\.\d+\.\d+$/.test(cleanCurrentIp)) {
         const quickHit =
-          (await probeHost(`${cleanCurrentIp}:5174`, 450)) ||
-          (await probeHost(`${cleanCurrentIp}:5173`, 450));
+          (await probeHost(`${cleanCurrentIp}:5174`, 650)) ||
+          (await probeHost(`${cleanCurrentIp}:5173`, 650));
         if (quickHit) {
-          connectToHost(quickHit);
-          setIsConnected(true);
+          await connectToHost(quickHit);
           setScanProgressText(`Found ${quickHit}!`);
           return;
         }
       }
 
-      // Scan each subnet prefix across priority octets first, then full sweep
       for (const prefix of prefixes) {
         setScanProgressText(`Scanning ${prefix}.x...`);
         const hostCandidates: string[] = [];
@@ -415,21 +481,24 @@ export const AndroidStageControllerView: React.FC = () => {
           hostCandidates.push(`${prefix}.${octet}:5173`);
         }
 
-        const batchSize = 50;
+        const batchSize = 20;
         for (let i = 0; i < hostCandidates.length; i += batchSize) {
           const batch = hostCandidates.slice(i, i + batchSize);
-          const results = await Promise.all(batch.map((hp) => probeHost(hp, 550)));
+          const results = await Promise.all(batch.map((hp) => probeHost(hp, 850)));
           const found = results.find((r) => r !== null);
           if (found) {
-            connectToHost(found);
-            setIsConnected(true);
+            await connectToHost(found);
             setScanProgressText(`Found ${found}!`);
             return;
           }
         }
       }
       setScanProgressText('No PC found');
-      setConnectionNotice('No FreeWorship PC found. Ensure both devices are on the same Wi-Fi.');
+      setConnectionNotice(
+        `No FreeWorship PC found${
+          detectedPhoneIp ? ` (Phone Wi-Fi IP: ${detectedPhoneIp})` : ''
+        }. Ensure same Wi-Fi & click "Allow Port in Windows Firewall" on PC.`
+      );
     } finally {
       setIsScanning(false);
     }
@@ -571,7 +640,7 @@ export const AndroidStageControllerView: React.FC = () => {
         </div>
 
         {/* Windows PC IP Connection Bar */}
-        <div className="flex flex-col gap-1">
+        <div data-tour="and-connect-bar" className="flex flex-col gap-1">
           <div className="flex items-center gap-1.5 flex-wrap">
             <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg px-2 py-1">
               <span className="text-[10px] font-bold text-slate-500 mr-1.5">PC IP:</span>
@@ -634,7 +703,10 @@ export const AndroidStageControllerView: React.FC = () => {
         </div>
 
           {/* View Mode Switcher */}
-          <div className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800">
+          <div
+            data-tour="and-view-modes"
+            className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800"
+          >
             <button
               onClick={() => setLayoutMode('split')}
               className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition ${
@@ -667,14 +739,28 @@ export const AndroidStageControllerView: React.FC = () => {
             </button>
           </div>
 
-          <button
-            onClick={() => setShowAboutModal(true)}
-            className="flex items-center gap-1 px-2.5 py-1.5 bg-booth-850 hover:bg-booth-800 border border-booth-700 text-slate-200 text-[10px] font-bold transition ml-auto"
-            title="About FreeWorship, GCash Donation & Changelog"
-          >
-            <Sparkles className="w-3 h-3 text-amber-400" />
-            About / Updates
-          </button>
+          <div className="flex items-center gap-1.5 ml-auto">
+            <button
+              onClick={() => {
+                setLayoutMode('split');
+                setShowAndroidLiveTour(true);
+              }}
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold transition"
+              title="Start Interactive Live Tutorial with Voice-Over"
+            >
+              <HelpCircle className="w-3 h-3 text-emerald-400" />
+              <span>How to Use</span>
+            </button>
+
+            <button
+              onClick={() => setShowAboutModal(true)}
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-booth-850 hover:bg-booth-800 border border-booth-700 text-slate-200 text-[10px] font-bold transition"
+              title="About FreeWorship, GCash Donation & Changelog"
+            >
+              <Sparkles className="w-3 h-3 text-amber-400" />
+              <span>About / Updates</span>
+            </button>
+          </div>
       </header>
 
       {/* Main Content Area */}
@@ -682,6 +768,7 @@ export const AndroidStageControllerView: React.FC = () => {
         {/* ================= SECTION 1: 3RD MONITOR (STAGE CONFIDENCE DISPLAY) ================= */}
         {(layoutMode === 'split' || layoutMode === 'stage-only') && (
           <div
+            data-tour="and-stage-monitor"
             className={`${
               layoutMode === 'stage-only'
                 ? 'flex-1 h-full'
@@ -878,7 +965,10 @@ export const AndroidStageControllerView: React.FC = () => {
         {(layoutMode === 'split' || layoutMode === 'controller-only') && (
           <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden">
             {/* Big Touch Transport & Projector Panic Controls */}
-            <div className="p-2.5 sm:p-3 bg-slate-900/90 border-b border-slate-800 flex flex-col gap-2 shrink-0">
+            <div
+              data-tour="and-transport"
+              className="p-2.5 sm:p-3 bg-slate-900/90 border-b border-slate-800 flex flex-col gap-2 shrink-0"
+            >
               {/* Row 1: Giant PREV / NEXT Buttons */}
               <div className="grid grid-cols-12 gap-2">
                 <button
@@ -947,21 +1037,24 @@ export const AndroidStageControllerView: React.FC = () => {
             </div>
 
             {/* Controller Navigation Tabs */}
-            <div className="flex items-center border-b border-slate-800 bg-slate-900/50 px-3 pt-1.5 gap-1.5 shrink-0 overflow-x-auto">
+            <div
+              data-tour="and-tabs"
+              className="flex items-center flex-wrap border-b border-slate-800 bg-slate-900/50 px-2 pt-1.5 gap-1 shrink-0"
+            >
               <button
                 onClick={() => setControllerTab('slides')}
-                className={`px-3 py-2 text-xs font-bold rounded-t-lg border-b-2 flex items-center gap-1.5 transition shrink-0 ${
+                className={`px-2.5 py-2 text-[11px] sm:text-xs font-bold rounded-t-lg border-b-2 flex items-center gap-1 transition shrink-0 ${
                   controllerTab === 'slides'
                     ? 'border-amber-500 text-amber-400 bg-slate-900'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
                 }`}
               >
-                <Layers className="w-3.5 h-3.5" /> Live Slides ({slides.length})
+                <Layers className="w-3.5 h-3.5" /> Slides ({slides.length})
               </button>
 
               <button
                 onClick={() => setControllerTab('schedule')}
-                className={`px-3 py-2 text-xs font-bold rounded-t-lg border-b-2 flex items-center gap-1.5 transition shrink-0 ${
+                className={`px-2.5 py-2 text-[11px] sm:text-xs font-bold rounded-t-lg border-b-2 flex items-center gap-1 transition shrink-0 ${
                   controllerTab === 'schedule'
                     ? 'border-amber-500 text-amber-400 bg-slate-900'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -972,24 +1065,24 @@ export const AndroidStageControllerView: React.FC = () => {
 
               <button
                 onClick={() => setControllerTab('add-item')}
-                className={`px-3 py-2 text-xs font-bold rounded-t-lg border-b-2 flex items-center gap-1.5 transition shrink-0 ${
+                className={`px-2.5 py-2 text-[11px] sm:text-xs font-bold rounded-t-lg border-b-2 flex items-center gap-1 transition shrink-0 ${
                   controllerTab === 'add-item'
                     ? 'border-emerald-500 text-emerald-400 bg-slate-900'
-                    : 'border-transparent text-emerald-300/80 hover:text-emerald-300'
+                    : 'border-transparent text-emerald-300/90 hover:text-emerald-300'
                 }`}
               >
-                <Plus className="w-3.5 h-3.5" /> + Add Song / Verse
+                <Plus className="w-3.5 h-3.5" /> Song / Bible
               </button>
 
               <button
                 onClick={() => setControllerTab('stage-tools')}
-                className={`px-3 py-2 text-xs font-bold rounded-t-lg border-b-2 flex items-center gap-1.5 transition shrink-0 ${
+                className={`px-2.5 py-2 text-[11px] sm:text-xs font-bold rounded-t-lg border-b-2 flex items-center gap-1 transition shrink-0 ${
                   controllerTab === 'stage-tools'
                     ? 'border-amber-500 text-amber-400 bg-slate-900'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
                 }`}
               >
-                <Clock className="w-3.5 h-3.5" /> Timer & Alerts
+                <Clock className="w-3.5 h-3.5" /> Tools
               </button>
             </div>
 
@@ -1000,7 +1093,6 @@ export const AndroidStageControllerView: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {slides.map((slide, idx) => {
                     const isLive = idx === payload.activeSlideIndex;
-                    const isNext = idx === payload.activeSlideIndex + 1;
                     return (
                       <button
                         key={slide.id || idx}
@@ -1010,14 +1102,16 @@ export const AndroidStageControllerView: React.FC = () => {
                         className={`text-left p-3 rounded-xl border-2 transition flex flex-col justify-between min-h-[104px] active:scale-[0.99] ${
                           isLive
                             ? 'bg-emerald-950/35 border-emerald-500 shadow-lg shadow-emerald-500/10'
-                            : isNext
-                            ? 'bg-amber-950/20 border-amber-500/60'
                             : 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2 mb-1.5">
                           <div className="flex items-center gap-1.5">
-                            <span className="w-5 h-5 rounded bg-slate-800 text-slate-300 font-mono text-[10px] font-bold flex items-center justify-center">
+                            <span
+                              className={`w-5 h-5 rounded font-mono text-[10px] font-bold flex items-center justify-center ${
+                                isLive ? 'bg-emerald-400 text-slate-950' : 'bg-slate-800 text-slate-300'
+                              }`}
+                            >
                               {idx + 1}
                             </span>
                             <span className="px-2 py-0.5 rounded bg-slate-800 text-amber-300 text-[10px] font-bold uppercase tracking-wider">
@@ -1027,11 +1121,6 @@ export const AndroidStageControllerView: React.FC = () => {
                           {isLive && (
                             <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-slate-950 font-black text-[9px] uppercase tracking-widest">
                               LIVE ON PROJECTOR
-                            </span>
-                          )}
-                          {isNext && !isLive && (
-                            <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold text-[9px] uppercase">
-                              NEXT
                             </span>
                           )}
                         </div>
@@ -1054,29 +1143,39 @@ export const AndroidStageControllerView: React.FC = () => {
               {/* TAB 2: SERVICE SCHEDULE SWITCHER & MANAGEMENT */}
               {controllerTab === 'schedule' && (
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                  <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-800 flex-wrap">
                     <span className="text-xs font-bold text-slate-400">
                       {scheduleList.length} items in Run-of-Show
                     </span>
-                    {scheduleList.length > 0 && (
+                    <div className="flex items-center gap-1.5">
                       <button
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              'Are you sure you want to remove ALL items from the Schedule?'
-                            )
-                          ) {
-                            dispatchRemoteAction({ action: 'CLEAR_SCHEDULE' });
-                            triggerRemoteNotice('Cleared all schedule items');
-                          }
-                        }}
-                        className="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-[11px] font-black flex items-center gap-1"
-                        title="Remove all items from schedule"
+                        onClick={() => setControllerTab('add-item')}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-black flex items-center gap-1"
+                        title="Add a Song or Bible Verse to PC Schedule"
                       >
-                        <Trash2 className="w-3 h-3" />
-                        <span>Clear All</span>
+                        <Plus className="w-3 h-3" />
+                        <span>Add Song / Bible</span>
                       </button>
-                    )}
+                      {scheduleList.length > 0 && (
+                        <button
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                'Are you sure you want to remove ALL items from the Schedule?'
+                              )
+                            ) {
+                              dispatchRemoteAction({ action: 'CLEAR_SCHEDULE' });
+                              triggerRemoteNotice('Cleared all schedule items');
+                            }
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-[11px] font-black flex items-center gap-1"
+                          title="Remove all items from schedule"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Clear All</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {scheduleList.length === 0 ? (
@@ -1185,11 +1284,14 @@ export const AndroidStageControllerView: React.FC = () => {
                           onChange={(e) => setRemoteBibleTranslation(e.target.value)}
                           className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-0.5 text-[10px] font-bold text-amber-300"
                         >
-                          <option value="KJV">KJV</option>
-                          <option value="NIV">NIV</option>
-                          <option value="NASB">NASB</option>
-                          <option value="ESV">ESV</option>
-                          <option value="MBB 1901">MBB 1901</option>
+                          {(payload.availableBibleTranslations && payload.availableBibleTranslations.length > 0
+                            ? payload.availableBibleTranslations
+                            : ['KJV', 'NIV', 'NASB', 'ESV', 'MBB 1901']
+                          ).map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
                         </select>
                       </div>
 
@@ -1331,81 +1433,159 @@ export const AndroidStageControllerView: React.FC = () => {
                     </div>
 
                     {/* REMOTE ADD SONG TO SCHEDULE */}
-                    <div className="p-4 rounded-2xl bg-slate-900 border-2 border-slate-700 flex flex-col space-y-3 max-h-[380px]">
-                      <div className="flex items-center justify-between">
+                    <div className="p-4 rounded-2xl bg-slate-900 border-2 border-slate-700 flex flex-col space-y-3 max-h-[420px]">
+                      <div className="flex items-center justify-between gap-2">
                         <span className="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-                          <Music className="w-4 h-4" /> Add Song to Service Schedule ({songsCatalog.length})
+                          <Music className="w-4 h-4" /> Add Song to Schedule ({songsCatalog.length})
                         </span>
+                        <button
+                          onClick={() => setShowNewSongCreator((v) => !v)}
+                          className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-[10px] font-black flex items-center gap-1"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>{showNewSongCreator ? 'Back to Library' : 'New Song'}</span>
+                        </button>
                       </div>
 
-                      <div className="relative">
-                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-                        <input
-                          type="text"
-                          value={songSearchQuery}
-                          onChange={(e) => setSongSearchQuery(e.target.value)}
-                          placeholder="Search song title, author, key..."
-                          className="w-full bg-slate-950 border-2 border-slate-700 rounded-xl pl-8 pr-3 py-2 text-xs text-white"
-                        />
-                      </div>
-
-                      <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-                        {songsCatalog
-                          .filter((s) => {
-                            if (!songSearchQuery.trim()) return true;
-                            const q = songSearchQuery.toLowerCase();
-                            return (
-                              s.title.toLowerCase().includes(q) ||
-                              s.author.toLowerCase().includes(q) ||
-                              s.musicalKey.toLowerCase().includes(q)
-                            );
-                          })
-                          .map((song) => (
-                            <div
-                              key={song.id}
-                              className="p-2.5 rounded-xl bg-slate-950 border-2 border-slate-800 flex items-center justify-between gap-2"
+                      {showNewSongCreator ? (
+                        <div className="space-y-2.5 overflow-y-auto pr-1">
+                          <div className="grid grid-cols-4 gap-2">
+                            <input
+                              type="text"
+                              value={newSongTitle}
+                              onChange={(e) => setNewSongTitle(e.target.value)}
+                              placeholder="Song Title..."
+                              className="col-span-3 bg-slate-950 border-2 border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                            />
+                            <input
+                              type="text"
+                              value={newSongKey}
+                              onChange={(e) => setNewSongKey(e.target.value)}
+                              placeholder="Key (G)"
+                              className="col-span-1 bg-slate-950 border-2 border-slate-700 rounded-xl px-2 py-2 text-xs text-amber-300 text-center font-bold"
+                            />
+                          </div>
+                          <textarea
+                            rows={5}
+                            value={newSongLyrics}
+                            onChange={(e) => setNewSongLyrics(e.target.value)}
+                            placeholder="Paste or type lyrics here (separate verses with a blank line)..."
+                            className="w-full bg-slate-950 border-2 border-slate-700 rounded-xl p-2.5 text-xs text-white"
+                          />
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              onClick={() => {
+                                if (!newSongTitle.trim() && !newSongLyrics.trim()) return;
+                                dispatchRemoteAction({
+                                  action: 'ADD_CUSTOM_SONG_TO_SCHEDULE',
+                                  title: newSongTitle.trim() || 'New Remote Song',
+                                  lyrics: newSongLyrics.trim(),
+                                  musicalKey: newSongKey.trim() || 'G',
+                                  goLive: false,
+                                });
+                                triggerRemoteNotice(`Created & Added "${newSongTitle.trim() || 'New Remote Song'}" to Schedule`);
+                                setNewSongTitle('');
+                                setNewSongLyrics('');
+                                setShowNewSongCreator(false);
+                              }}
+                              className="py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-amber-300 font-bold text-xs"
                             >
-                              <div className="min-w-0">
-                                <div className="text-xs font-bold text-white truncate">
-                                  {song.title}
-                                </div>
-                                <div className="text-[10px] text-slate-400 truncate">
-                                  {song.author} • Key: {song.musicalKey} • {song.slideCount} slides
-                                </div>
-                              </div>
+                              + Add to Schedule
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (!newSongTitle.trim() && !newSongLyrics.trim()) return;
+                                dispatchRemoteAction({
+                                  action: 'ADD_CUSTOM_SONG_TO_SCHEDULE',
+                                  title: newSongTitle.trim() || 'New Remote Song',
+                                  lyrics: newSongLyrics.trim(),
+                                  musicalKey: newSongKey.trim() || 'G',
+                                  goLive: true,
+                                });
+                                triggerRemoteNotice(`Projected "${newSongTitle.trim() || 'New Remote Song'}" Live!`);
+                                setNewSongTitle('');
+                                setNewSongLyrics('');
+                                setShowNewSongCreator(false);
+                                setControllerTab('slides');
+                              }}
+                              className="py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs"
+                            >
+                              Add & Project Live
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="relative">
+                            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                            <input
+                              type="text"
+                              value={songSearchQuery}
+                              onChange={(e) => setSongSearchQuery(e.target.value)}
+                              placeholder="Search song title, author, key..."
+                              className="w-full bg-slate-950 border-2 border-slate-700 rounded-xl pl-8 pr-3 py-2 text-xs text-white"
+                            />
+                          </div>
 
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <button
-                                  onClick={() => {
-                                    dispatchRemoteAction({
-                                      action: 'ADD_SONG_TO_SCHEDULE',
-                                      songId: song.id,
-                                      goLive: false,
-                                    });
-                                    triggerRemoteNotice(`Added "${song.title}" to Schedule`);
-                                  }}
-                                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-amber-300 font-bold text-[11px]"
+                          <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                            {songsCatalog
+                              .filter((s) => {
+                                if (!songSearchQuery.trim()) return true;
+                                const q = songSearchQuery.toLowerCase();
+                                return (
+                                  s.title.toLowerCase().includes(q) ||
+                                  s.author.toLowerCase().includes(q) ||
+                                  s.musicalKey.toLowerCase().includes(q)
+                                );
+                              })
+                              .map((song) => (
+                                <div
+                                  key={song.id}
+                                  className="p-2.5 rounded-xl bg-slate-950 border-2 border-slate-800 flex items-center justify-between gap-2"
                                 >
-                                  + Schedule
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    dispatchRemoteAction({
-                                      action: 'ADD_SONG_TO_SCHEDULE',
-                                      songId: song.id,
-                                      goLive: true,
-                                    });
-                                    triggerRemoteNotice(`Projected "${song.title}" Live!`);
-                                    setControllerTab('slides');
-                                  }}
-                                  className="px-2.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-[11px]"
-                                >
-                                  Go Live
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                      </div>
+                                  <div className="min-w-0">
+                                    <div className="text-xs font-bold text-white truncate">
+                                      {song.title}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 truncate">
+                                      {song.author} • Key: {song.musicalKey} • {song.slideCount} slides
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <button
+                                      onClick={() => {
+                                        dispatchRemoteAction({
+                                          action: 'ADD_SONG_TO_SCHEDULE',
+                                          songId: song.id,
+                                          goLive: false,
+                                        });
+                                        triggerRemoteNotice(`Added "${song.title}" to Schedule`);
+                                      }}
+                                      className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-amber-300 font-bold text-[11px]"
+                                    >
+                                      + Schedule
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        dispatchRemoteAction({
+                                          action: 'ADD_SONG_TO_SCHEDULE',
+                                          songId: song.id,
+                                          goLive: true,
+                                        });
+                                        triggerRemoteNotice(`Projected "${song.title}" Live!`);
+                                        setControllerTab('slides');
+                                      }}
+                                      className="px-2.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-[11px]"
+                                    >
+                                      Go Live
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1506,6 +1686,64 @@ export const AndroidStageControllerView: React.FC = () => {
           platform="android"
           onClose={() => setShowAboutModal(false)}
         />
+      )}
+
+      {showHowToUseModal && (
+        <HowToUseModal
+          isOpen={showHowToUseModal}
+          platform="android"
+          onClose={() => setShowHowToUseModal(false)}
+          onStartLiveTour={() => {
+            setShowHowToUseModal(false);
+            setLayoutMode('split');
+            setShowAndroidLiveTour(true);
+          }}
+        />
+      )}
+
+      {showAndroidLiveTour && (
+        <LiveInterfaceTourOverlay
+          isOpen={showAndroidLiveTour}
+          steps={ANDROID_LIVE_TOUR_STEPS.map((st): LiveTourStep => ({
+            ...st,
+            onEnter: () => {
+              setLayoutMode('split');
+              if (st.id === 'and-05') {
+                setControllerTab('add-item');
+              } else {
+                setControllerTab('slides');
+              }
+            },
+          }))}
+          onClose={() => setShowAndroidLiveTour(false)}
+          onOpenWrittenGuide={() => setShowHowToUseModal(true)}
+        />
+      )}
+
+      {/* Floating Success Notification Banner when Android 3rd Monitor connects */}
+      {connectedToast && (
+        <div
+          key={connectedToast.id}
+          className="fixed top-3 left-1/2 -translate-x-1/2 z-[120] w-[92%] max-w-md rounded-2xl bg-emerald-950/95 border-2 border-emerald-400 text-emerald-100 px-4 py-3 shadow-2xl flex items-center gap-3 animate-fade-in"
+        >
+          <div className="w-8 h-8 rounded-xl bg-emerald-500 text-slate-950 flex items-center justify-center shrink-0">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-black uppercase tracking-wide text-white">
+              Successfully Connected to Windows PC!
+            </div>
+            <div className="text-[11px] text-emerald-300 font-mono truncate">
+              Host: {connectedToast.host} • Live 3rd Monitor Ready
+            </div>
+          </div>
+          <button
+            onClick={() => setConnectedToast(null)}
+            className="p-1 rounded hover:bg-white/10 text-emerald-200 shrink-0"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       )}
     </div>
   );

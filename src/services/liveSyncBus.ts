@@ -1,5 +1,6 @@
 import {
   HardwareDisplayInfo,
+  LanConnectionEvent,
   LiveBroadcastPayload,
   MultiScreenRoutingSettings,
   RemoteControlAction,
@@ -84,18 +85,23 @@ declare global {
         displays?: HardwareDisplayInfo[];
         lanIps?: string[];
         lanPort?: number;
+        connectedAndroidDevices?: number;
+        connectedDevicesList?: Array<{ ip: string; device: string }>;
       }>;
       getLanInfo?: () => Promise<{ ips: string[]; port: number }>;
       updateRouting?: (config: Partial<MultiScreenRoutingSettings>) => Promise<unknown>;
       broadcastState: (payload: LiveBroadcastPayload) => void;
       onStateSync: (callback: (payload: LiveBroadcastPayload) => void) => () => void;
       onRemoteCommand?: (callback: (command: RemoteControlAction) => void) => () => void;
+      onAndroidConnectionEvent?: (callback: (event: LanConnectionEvent) => void) => () => void;
       onWindowStatus: (callback: (status: any) => void) => () => void;
       saveUserSongs?: (songsJson: string) => Promise<{ ok: boolean; error?: string }>;
       loadUserSongs?: () => Promise<{ ok: boolean; data?: string | null; error?: string }>;
       loadBuiltInBibleFile?: (fileName: string) => Promise<string | null>;
       downloadAndInstallUpdate?: (url: string) => Promise<{ ok: boolean; error?: string }>;
-      setupFirewallRule?: () => Promise<{ ok: boolean; code?: number; error?: string }>;
+      checkFirewallRule?: () => Promise<{ ok: boolean; allowed: boolean; tcpAllowed?: boolean; udpAllowed?: boolean; error?: string }>;
+      setupFirewallRule?: () => Promise<{ ok: boolean; code?: number; message?: string; error?: string }>;
+      saveAndroidApk?: () => Promise<{ ok: boolean; canceled?: boolean; path?: string; error?: string }>;
       onUpdateDownloadProgress?: (callback: (progress: { percent: number; bytesReceived: number; totalBytes: number; stage?: string }) => void) => () => void;
     };
   }
@@ -206,7 +212,7 @@ export async function fetchLocalLanServerInfo(): Promise<LanServerInfo> {
         return {
           ips: status.lanIps,
           port: status.lanPort || 5174,
-          connectedClients: 0,
+          connectedClients: status.connectedAndroidDevices || 0,
         };
       }
     } catch {}
@@ -220,7 +226,7 @@ export async function fetchLocalLanServerInfo(): Promise<LanServerInfo> {
         return {
           ips: Array.isArray(data.ips) && data.ips.length > 0 ? data.ips : ['127.0.0.1'],
           port: Number(data.port) || Number(window.location.port) || 5173,
-          connectedClients: Number(data.connectedClients) || 0,
+          connectedClients: Number(data.connectedClients ?? data.connectedDevices) || 0,
         };
       }
     } catch {}
@@ -234,15 +240,27 @@ export async function fetchLocalLanServerInfo(): Promise<LanServerInfo> {
  * over either Electron IPC or the HTTP `/api/lan-sync?role=operator` endpoint.
  */
 export function subscribeRemoteCommands(
-  onCommand: (command: RemoteControlAction) => void
+  onCommand: (command: RemoteControlAction) => void,
+  onConnectionEvent?: (event: LanConnectionEvent) => void
 ): () => void {
-  let cleanups: Array<() => void> = [];
+  const cleanups: Array<() => void> = [];
 
   if (typeof window !== 'undefined' && window.freeworshipDesktop?.onRemoteCommand) {
     const off = window.freeworshipDesktop.onRemoteCommand((cmd) => {
       onCommand(cmd);
     });
     cleanups.push(off);
+  }
+
+  if (
+    onConnectionEvent &&
+    typeof window !== 'undefined' &&
+    window.freeworshipDesktop?.onAndroidConnectionEvent
+  ) {
+    const offConn = window.freeworshipDesktop.onAndroidConnectionEvent((ev) => {
+      onConnectionEvent(ev);
+    });
+    cleanups.push(offConn);
   }
 
   if (typeof window !== 'undefined' && window.location.origin.startsWith('http')) {
@@ -255,6 +273,13 @@ export function subscribeRemoteCommands(
           for (const item of data.commands) {
             if (item && item.command) {
               onCommand(item.command as RemoteControlAction);
+            }
+          }
+        }
+        if (onConnectionEvent && Array.isArray(data.connectionEvents)) {
+          for (const ev of data.connectionEvents) {
+            if (ev && ev.type) {
+              onConnectionEvent(ev as LanConnectionEvent);
             }
           }
         }
@@ -509,4 +534,25 @@ export async function closeExternalDisplayWindow(
   if (typeof window !== 'undefined' && window.freeworshipDesktop) {
     return window.freeworshipDesktop.closeWindow(mode);
   }
+}
+
+export async function downloadOrSaveAndroidApk(): Promise<{
+  ok: boolean;
+  canceled?: boolean;
+  path?: string;
+  error?: string;
+}> {
+  if (typeof window !== 'undefined' && window.freeworshipDesktop?.saveAndroidApk) {
+    return window.freeworshipDesktop.saveAndroidApk();
+  }
+  if (typeof document !== 'undefined') {
+    const a = document.createElement('a');
+    a.href = './FreeWorship-StageController.apk';
+    a.download = 'FreeWorship-StageController.apk';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    return { ok: true };
+  }
+  return { ok: false, error: 'Download not available in this environment.' };
 }

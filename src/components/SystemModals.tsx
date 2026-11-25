@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { APP_LOGO } from '../assets/logo';
 import {
   AlertTriangle,
   Check,
@@ -17,15 +18,15 @@ import {
   AlertCircle,
 } from 'lucide-react';
 
-export const APP_VERSION = '1.1.7';
-export const APP_RELEASE_DATE = 'November 9, 2026';
+export const APP_VERSION = '1.1.8';
+export const APP_RELEASE_DATE = 'November 10, 2026';
 export const GITHUB_UPDATE_REPO = 'https://github.com/mielglitx/FreeWorshipUpdate';
 export const GITHUB_RELEASES_API =
   'https://api.github.com/repos/mielglitx/FreeWorshipUpdate/releases/latest';
 export const GITHUB_RAW_UPDATES_URL =
   'https://raw.githubusercontent.com/mielglitx/FreeWorshipUpdate/main/updates.json';
 export const GITHUB_RAW_APK_URL =
-  'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.7/FreeWorship-StageController.apk';
+  'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.8/FreeWorship-StageController.apk';
 
 /**
  * Semver comparison: returns true ONLY if remoteVersion is strictly greater than currentVersion.
@@ -57,6 +58,18 @@ export interface ChangelogItem {
 }
 
 export const APP_CHANGELOG: ChangelogItem[] = [
+  {
+    version: '1.1.8',
+    date: 'November 10, 2026',
+    platform: 'Windows Desktop & Android',
+    title: 'VS Code Studio Pro Titlebar, Native Desktop Menus & Clean UI Overhaul',
+    highlights: [
+      'VS Code Studio Titlebar: Replaced the crowded 48px header with a sleek 36px desktop menu bar (File, Output, View, Tools, Help) featuring smooth hover switching, outside-click closing, and keyboard shortcuts.',
+      'File & Output Menus: Added 1-click access to Save/Load Schedule (Ctrl+S / Ctrl+O), Import/Export, 2nd Screen Projector, 3rd Screen Stage Confidence, and OBS Lower-Thirds overlay.',
+      'Centered Emergency Panic Controls: High-visibility [B] Blackout, [L] Logo, and [C] Clear Text keys with glowing live state feedback and instant Restore [Esc].',
+      'Word Simplification & Badge Redesign: Replaced "SONG PREVIEW" and "LIVE: SONG" with concise "PREVIEW" and "LIVE" badges, reclaiming over 80px horizontal space and preventing song title truncation.',
+    ],
+  },
   {
     version: '1.1.7',
     date: 'November 9, 2026',
@@ -207,13 +220,22 @@ export const StartupSplashScreen: React.FC<StartupSplashScreenProps> = ({
   return (
     <div className="fixed inset-0 z-[100] bg-booth-950 flex flex-col items-center justify-center p-6 select-none">
       <div className="w-full max-w-md bg-booth-900 border-2 border-amber-500/60 rounded-3xl p-8 flex flex-col items-center text-center shadow-2xl space-y-5">
-        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-xl shadow-amber-500/30 border-2 border-amber-200 animate-pulse">
-          <Sparkles className="w-10 h-10 text-black" />
-        </div>
+        <img
+          src={APP_LOGO}
+          alt="FreeWorship Logo"
+          className="w-24 h-24 rounded-2xl object-contain shadow-2xl shadow-cyan-500/20 border border-cyan-400/30"
+          onError={(e) => {
+            const target = e.currentTarget;
+            if (!target.dataset.triedRelative) {
+              target.dataset.triedRelative = 'true';
+              target.src = './logo.png';
+            }
+          }}
+        />
 
         <div>
           <h1 className="font-display font-black tracking-tight text-3xl text-white">
-            FREE<span className="text-amber-400">WORSHIP</span>
+            <span className="text-cyan-400">FREE</span>WORSHIP
           </h1>
           <p className="text-xs font-bold uppercase tracking-widest text-emerald-400 mt-1">
             Studio v.{APP_VERSION} • Zero-Latency Broadcast Engine
@@ -565,13 +587,22 @@ export const WelcomeAboutModal: React.FC<WelcomeAboutModalProps> = ({
         {/* Top Banner */}
         <div className="px-5 py-3.5 bg-booth-950 border-b-2 border-booth-700 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-lg border border-amber-200">
-              <Sparkles className="w-5 h-5 text-black" />
-            </div>
+            <img
+              src={APP_LOGO}
+              alt="FreeWorship Logo"
+              className="w-10 h-10 rounded-xl object-contain shadow-lg border border-cyan-400/30 shrink-0"
+              onError={(e) => {
+                const target = e.currentTarget;
+                if (!target.dataset.triedRelative) {
+                  target.dataset.triedRelative = 'true';
+                  target.src = './logo.png';
+                }
+              }}
+            />
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-display font-black text-base text-white">
-                  FreeWorship v.{APP_VERSION}
+                  <span className="text-cyan-400">Free</span>Worship v.{APP_VERSION}
                 </h3>
                 <span className="px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40">
                   {isAndroid ? 'Android Remote' : 'Windows Studio'}

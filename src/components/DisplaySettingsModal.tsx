@@ -37,6 +37,7 @@ import {
   closeExternalDisplayWindow,
   DEFAULT_ROUTING_SETTINGS,
   detectConnectedDisplays,
+  downloadOrSaveAndroidApk,
   fetchLocalLanServerInfo,
   LanServerInfo,
   openExternalDisplayWindow,
@@ -807,13 +808,15 @@ export const DisplaySettingsModal: React.FC<DisplaySettingsModalProps> = ({
                     </span>
                   </div>
                 ))}
-                <a
-                  href="/FreeWorship-StageController.apk"
-                  download="FreeWorship-StageController.apk"
+                <button
+                  type="button"
+                  onClick={() => {
+                    downloadOrSaveAndroidApk();
+                  }}
                   className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-black text-xs shadow-lg shadow-amber-500/20"
                 >
                   Download Android .APK
-                </a>
+                </button>
                 <button
                   type="button"
                   onClick={() =>

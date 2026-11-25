@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { BookOpen, Music } from 'lucide-react';
+import { APP_LOGO } from '../assets/logo';
 import {
   MediaAsset,
+  ScheduleItemType,
   Slide,
   SlideTransitionSettings,
   SlideTransitionType,
@@ -30,6 +33,8 @@ interface SlideStageRendererProps {
   scaleMode?: 'thumbnail' | 'preview' | 'projector';
   transparentStreamMode?: boolean;
   forceShowBoundaryGuide?: boolean;
+  itemTitle?: string;
+  itemType?: ScheduleItemType;
 }
 
 export function resolveEffectiveBoundary(
@@ -126,6 +131,8 @@ export const SlideStageRenderer: React.FC<SlideStageRendererProps> = ({
   scaleMode = 'preview',
   transparentStreamMode = false,
   forceShowBoundaryGuide = false,
+  itemTitle,
+  itemType,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const boundaryBoxRef = useRef<HTMLDivElement | null>(null);
@@ -354,6 +361,30 @@ export const SlideStageRenderer: React.FC<SlideStageRendererProps> = ({
   const enterAnimName = getAnimationName(effectiveTransition.type, 'in');
   const exitAnimName = getAnimationName(effectiveTransition.type, 'out');
 
+  const displayMetadataLabel = (() => {
+    if (itemType === 'scripture') {
+      return (slide?.subtext || itemTitle || '').trim();
+    }
+    if (itemType === 'song') {
+      return (itemTitle || slide?.subtext || '').trim();
+    }
+    return (itemTitle || slide?.subtext || '').trim();
+  })();
+
+  const showMetadataOverlay =
+    Boolean(displayMetadataLabel) &&
+    !panic.blackout &&
+    !panic.logoMode &&
+    !panic.clearText &&
+    !transparentStreamMode &&
+    scaleMode !== 'thumbnail' &&
+    Boolean(slide || exitingSlide);
+
+  const metaFontSizePx = Math.max(9, 24 * scaleRatio);
+  const metaIconSizePx = Math.max(10, 22 * scaleRatio);
+  const metaPadX = Math.max(6, 16 * scaleRatio);
+  const metaPadY = Math.max(3, 7 * scaleRatio);
+
   const renderSlideTextBlock = (
     targetSlide: Slide,
     phase: 'in' | 'out',
@@ -459,11 +490,18 @@ export const SlideStageRenderer: React.FC<SlideStageRendererProps> = ({
               className="max-h-[48%] max-w-[65%] object-contain rounded-2xl mb-4 shadow-2xl"
             />
           ) : (
-            <div className="w-16 h-16 md:w-24 md:h-24 rounded-2xl bg-amber-500/20 border-2 border-amber-400/60 flex items-center justify-center mb-4 shadow-2xl backdrop-blur-md">
-              <span className="text-amber-300 font-black text-2xl md:text-4xl tracking-tighter">
-                FW
-              </span>
-            </div>
+            <img
+              src={APP_LOGO}
+              alt="FreeWorship Logo"
+              className="max-h-[48%] max-w-[65%] object-contain rounded-2xl mb-4 shadow-2xl"
+              onError={(e) => {
+                const target = e.currentTarget;
+                if (!target.dataset.triedRelative) {
+                  target.dataset.triedRelative = 'true';
+                  target.src = './logo.png';
+                }
+              }}
+            />
           )}
           <h2
             className="font-display font-black tracking-widest text-white uppercase"
@@ -530,6 +568,56 @@ export const SlideStageRenderer: React.FC<SlideStageRendererProps> = ({
 
           {/* Entering / Active Slide Layer */}
           {slide && renderSlideTextBlock(slide, 'in', true)}
+        </div>
+      )}
+
+      {/* 2nd Monitor Title & Scripture Reference Caption Overlay */}
+      {showMetadataOverlay && (
+        <div
+          className="absolute z-20 pointer-events-none max-w-[85%]"
+          style={{
+            left: '3%',
+            ...(theme.verticalAlign === 'top' ? { bottom: '3%' } : { top: '3%' }),
+          }}
+        >
+          <div
+            className="inline-flex items-center rounded-lg bg-black/50 backdrop-blur-sm border border-white/15 shadow-lg max-w-full"
+            style={{
+              padding: `${metaPadY}px ${metaPadX}px`,
+              gap: `${Math.max(4, 8 * scaleRatio)}px`,
+            }}
+          >
+            {itemType === 'scripture' ? (
+              <BookOpen
+                style={{
+                  width: `${metaIconSizePx}px`,
+                  height: `${metaIconSizePx}px`,
+                  color: theme.accentColor || '#fbbf24',
+                  flexShrink: 0,
+                }}
+              />
+            ) : (
+              <Music
+                style={{
+                  width: `${metaIconSizePx}px`,
+                  height: `${metaIconSizePx}px`,
+                  color: theme.accentColor || '#fbbf24',
+                  flexShrink: 0,
+                }}
+              />
+            )}
+            <span
+              className="font-bold tracking-wide truncate"
+              style={{
+                fontFamily: fontStack,
+                fontSize: `${metaFontSizePx}px`,
+                color: theme.textColor || '#ffffff',
+                textShadow: '0 2px 10px rgba(0,0,0,0.95)',
+              }}
+            >
+              {displayMetadataLabel}
+            </span>
+          </div>
         </div>
       )}
 

@@ -2,7 +2,7 @@
   "name": "freeworship",
   "private": true,
   "type": "module",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "description": "Free, zero-latency cross-platform worship presentation software for Windows, macOS, and Linux",
   "author": "Amiel Yalung",
   "repository": {
@@ -33,17 +33,28 @@
     },
     "files": [
       "dist/**/*",
+      "!dist/**/*.apk",
       "electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "public/FreeWorship-StageController.apk",
+        "to": "FreeWorship-StageController.apk"
+      }
     ],
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
@@ -62,6 +73,7 @@
   "dependencies": {
     "jszip": "^3.10.2",
     "lucide-react": "^0.468.0",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
@@ -70,6 +82,7 @@
     "@capacitor/cli": "^8.6.0",
     "@capacitor/core": "^8.6.0",
     "@types/node": "^22.10.2",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",

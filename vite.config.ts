@@ -18,7 +18,24 @@ function getLocalLanIps(): string[] {
 function freeworshipLanBridgePlugin(): Plugin {
   let latestPayload: unknown = null;
   let commandQueue: Array<{ id: string; command: unknown; timestamp: number }> = [];
-  const connectedClients = new Map<string, number>();
+  let connectionEvents: Array<{ type: 'connected' | 'disconnected'; ip: string; device: string; connectedCount: number; timestamp: number }> = [];
+  const connectedClients = new Map<string, { key: string; ip: string; device: string; lastSeen: number }>();
+
+  const pruneClients = () => {
+    const now = Date.now();
+    for (const [key, entry] of connectedClients.entries()) {
+      if (now - entry.lastSeen > 12000) {
+        connectedClients.delete(key);
+        connectionEvents.push({
+          type: 'disconnected',
+          ip: entry.ip,
+          device: entry.device,
+          connectedCount: connectedClients.size,
+          timestamp: now,
+        });
+      }
+    }
+  };
 
   return {
     name: 'freeworship-lan-bridge',
@@ -40,17 +57,47 @@ function freeworshipLanBridgePlugin(): Plugin {
           return;
         }
 
-        const clientIp = req.socket.remoteAddress || 'unknown';
-        connectedClients.set(clientIp, Date.now());
-        // Prune clients inactive for > 15s
-        const now = Date.now();
-        for (const [ip, lastSeen] of connectedClients.entries()) {
-          if (now - lastSeen > 15000) connectedClients.delete(ip);
+        pruneClients();
+        const url = req.url || '';
+        const rawIp = req.socket.remoteAddress || 'unknown';
+        const cleanIp = rawIp.replace(/^::ffff:/i, '');
+        const isClientQuery = url.includes('role=client') || url.includes('device=');
+        const isOperator = url.includes('role=operator');
+
+        if (!isOperator && (isClientQuery || (req.method === 'POST' && cleanIp !== '127.0.0.1' && cleanIp !== '::1'))) {
+          let deviceName = 'Android 3rd Monitor';
+          try {
+            const parsed = new URL(url, 'http://localhost');
+            const d = parsed.searchParams.get('device');
+            if (d) deviceName = d;
+          } catch {}
+          const key = `${cleanIp}|${deviceName}`;
+          const isNew = !connectedClients.has(key);
+          const now = Date.now();
+          connectedClients.set(key, { key, ip: cleanIp, device: deviceName, lastSeen: now });
+          if (isNew) {
+            connectionEvents.push({
+              type: 'connected',
+              ip: cleanIp,
+              device: deviceName,
+              connectedCount: connectedClients.size,
+              timestamp: now,
+            });
+          }
         }
 
         if (req.url === '/ping' || req.url === '/health') {
           res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ ok: true, app: 'FreeWorship', status: 'online', port: 5173 }));
+          res.end(
+            JSON.stringify({
+              ok: true,
+              app: 'FreeWorship',
+              status: 'online',
+              port: 5173,
+              connectedClients: connectedClients.size,
+              connectedDevices: connectedClients.size,
+            })
+          );
           return;
         }
 
@@ -63,17 +110,22 @@ function freeworshipLanBridgePlugin(): Plugin {
               service: 'FreeWorship Studio LAN Server',
               ips: getLocalLanIps(),
               port: 5173,
+              connectedClients: connectedClients.size,
               connectedDevices: connectedClients.size,
+              devices: Array.from(connectedClients.values()),
             })
           );
           return;
         }
 
         if (req.url.startsWith('/api/lan-sync') && req.method === 'GET') {
-          const isOperator = req.url.includes('role=operator');
           const pendingCommands = isOperator ? [...commandQueue] : [];
           if (isOperator && commandQueue.length > 0) {
             commandQueue = [];
+          }
+          const events = isOperator ? [...connectionEvents] : [];
+          if (isOperator && connectionEvents.length > 0) {
+            connectionEvents = [];
           }
           res.setHeader('Content-Type', 'application/json');
           res.end(
@@ -83,7 +135,10 @@ function freeworshipLanBridgePlugin(): Plugin {
               state: latestPayload,
               payload: latestPayload,
               commands: pendingCommands,
+              connectionEvents: events,
               ips: getLocalLanIps(),
+              port: 5173,
+              connectedClients: connectedClients.size,
               connectedDevices: connectedClients.size,
             })
           );

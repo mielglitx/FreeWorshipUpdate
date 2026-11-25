@@ -126,6 +126,7 @@ export type RemoteControlAction =
   | { action: 'SELECT_SLIDE'; index: number }
   | { action: 'SELECT_ITEM'; itemId: string }
   | { action: 'ADD_SONG_TO_SCHEDULE'; songId: string; goLive?: boolean }
+  | { action: 'ADD_CUSTOM_SONG_TO_SCHEDULE'; title: string; lyrics: string; author?: string; musicalKey?: string; goLive?: boolean }
   | { action: 'ADD_SCRIPTURE_TO_SCHEDULE'; reference: string; translation?: string; goLive?: boolean }
   | { action: 'TOGGLE_PANIC'; key: 'blackout' | 'logoMode' | 'clearText' }
   | { action: 'RESTORE_PANIC' }
@@ -135,6 +136,14 @@ export type RemoteControlAction =
   | { action: 'CLEAR_ALERT' }
   | { action: 'DELETE_SCHEDULE_ITEM'; itemId: string }
   | { action: 'CLEAR_SCHEDULE' };
+
+export interface LanConnectionEvent {
+  type: 'connected' | 'disconnected';
+  ip: string;
+  device: string;
+  connectedCount: number;
+  timestamp?: number;
+}
 
 export interface ThemeTemplate {
   id: string;
@@ -217,6 +226,7 @@ export interface CountdownState {
 
 export interface LiveBroadcastPayload {
   activeItemId: string;
+  activeItemType?: ScheduleItemType;
   activeItemTitle: string;
   activeItemSubtitle: string;
   activeSlideIndex: number;
@@ -237,6 +247,7 @@ export interface LiveBroadcastPayload {
     musicalKey: string;
     slideCount: number;
   }>;
+  availableBibleTranslations?: string[];
   background: MediaAsset;
   theme: ThemeTemplate;
   routing?: MultiScreenRoutingSettings;

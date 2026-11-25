@@ -1,27 +1,42 @@
 {
-  "version": "1.1.7",
-  "releaseDate": "November 9, 2026",
+  "version": "1.1.8",
+  "releaseDate": "November 25, 2026",
   "author": "Amiel Yalung",
   "repository": "https://github.com/mielglitx/FreeWorshipUpdate",
   "windows": {
-    "version": "1.1.7",
-    "releaseDate": "November 9, 2026",
+    "version": "1.1.8",
+    "releaseDate": "November 25, 2026",
     "appName": "FreeWorship Studio (Windows)",
-    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.7/FreeWorship.Studio-Setup-1.1.7.exe",
+    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.8/FreeWorship-Studio-Setup-1.1.8.exe",
     "portableUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases",
-    "fileName": "FreeWorship Studio-Setup-1.1.7.exe",
-    "notes": "v1.1.7 update: Bulletproof Android ↔ Windows LAN Sync, Wi-Fi auto-discovery with native IP detection, dual-port LAN server (5174/5173), universal CORS headers, and cleartext network security config."
+    "fileName": "FreeWorship Studio-Setup-1.1.8.exe",
+    "notes": "v1.1.8 update: VS Code Studio Titlebar, official FreeWorship logo branding, top-bar Android APK & offline QR installer, UAC firewall helper with live status badge, UDP + native Wi-Fi PC discovery, 2nd monitor titles, and live on-interface guided tour with natural voice-over."
   },
   "android": {
-    "version": "1.1.7",
-    "releaseDate": "November 9, 2026",
+    "version": "1.1.8",
+    "releaseDate": "November 25, 2026",
     "appName": "FreeWorship Android Remote & 3rd Monitor",
-    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.7/FreeWorship-StageController.apk",
+    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.8/FreeWorship-StageController.apk",
     "fallbackDownloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/raw/main/FreeWorship-StageController.apk",
     "fileName": "FreeWorship-StageController.apk",
-    "notes": "v1.1.7 update: Fixed Wi-Fi PC scan and manual IP connection on Android 9+ with network security config, native Wi-Fi subnet detection, dual-port fallback, and responsive connection status."
+    "notes": "v1.1.8 update: Official logo branding, native multi-threaded UDP + subnet PC discovery, simultaneous connection toast notifications, remote Bible loading, custom song creation, and ON AIR slide highlighting fix."
   },
   "changelog": [
+    {
+      "version": "1.1.8",
+      "date": "November 25, 2026",
+      "platform": "Windows Desktop & Android",
+      "title": "VS Code Studio Titlebar, QR Android Setup, Firewall Helper, UDP Discovery & Live Voice-Guided Tour",
+      "highlights": [
+        "Interactive On-Interface Guided Tour: Spotlight walkthroughs directly on the live Windows interface and Android simulator with 15 natural studio voice-over audio tracks.",
+        "Top-Bar Android APK & Scannable QR Installer: Dedicated header button, offline QR code pointing to the local LAN APK download link, and native .apk export.",
+        "Windows Firewall Helper & Status Check: Requests UAC elevation for TCP 5174/5173 and UDP 41234 and displays a green Already Allowed badge when configured.",
+        "UDP + Native Wi-Fi Discovery & Connection Toasts: Instant UDP broadcast (41234) and multi-threaded Java subnet scan with real-time connection alerts on PC and Android.",
+        "Android Remote Upgrades: Dynamic built-in Bible loading, custom song creation from Android, synced translations, and ON AIR-only slide highlighting.",
+        "Official Branding & 2nd Monitor Titles: Official FreeWorship logo across icons/splash/titlebar plus Song Title and Scripture reference captions on the projector and live monitor.",
+        "VS Code Studio Titlebar: Compact 36px native menu bar (File, Output, View, Tools, Help) with centered [B], [L], [C] panic controls."
+      ]
+    },
     {
       "version": "1.1.7",
       "date": "November 9, 2026",

@@ -101,6 +101,8 @@ export const OutputDisplayView: React.FC<OutputDisplayViewProps> = ({ mode }) =>
           logoAsset={payload.logoAsset}
           stageAlert={payload.stageAlert}
           scaleMode="projector"
+          itemTitle={payload.activeItemTitle}
+          itemType={payload.activeItemType}
         />
       </div>
     );

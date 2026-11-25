@@ -22,11 +22,18 @@ contextBridge.exposeInMainWorld('freeworshipDesktop', {
     ipcRenderer.on('freeworship:window-status', listener);
     return () => ipcRenderer.removeListener('freeworship:window-status', listener);
   },
+  onAndroidConnectionEvent: (callback) => {
+    const listener = (_event, info) => callback(info);
+    ipcRenderer.on('freeworship:android-connection-event', listener);
+    return () => ipcRenderer.removeListener('freeworship:android-connection-event', listener);
+  },
   downloadAndInstallUpdate: (url) => ipcRenderer.invoke('freeworship:download-and-install-update', url),
   saveUserSongs: (songsJson) => ipcRenderer.invoke('freeworship:save-user-songs', songsJson),
   loadUserSongs: () => ipcRenderer.invoke('freeworship:load-user-songs'),
   loadBuiltInBibleFile: (fileName) => ipcRenderer.invoke('freeworship:load-bible-file', fileName),
+  checkFirewallRule: () => ipcRenderer.invoke('freeworship:check-firewall-rule'),
   setupFirewallRule: () => ipcRenderer.invoke('freeworship:setup-firewall-rule'),
+  saveAndroidApk: () => ipcRenderer.invoke('freeworship:save-android-apk'),
   onUpdateDownloadProgress: (callback) => {
     const listener = (_event, progress) => callback(progress);
     ipcRenderer.on('freeworship:update-download-progress', listener);

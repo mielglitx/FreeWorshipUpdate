@@ -4,6 +4,36 @@ All notable changes to the **FreeWorship Studio** (Windows Desktop Presentation 
 
 ---
 
+## [1.1.8] — November 25, 2026
+
+### 🎓 Interactive On-Interface Tour with Natural Neural Voice-Over
+- **Live On-Interface Guided Tour**: Replaced static tutorial cards with a real-time interactive spotlight tour (`LiveInterfaceTourOverlay`) that highlights actual buttons, panels, and menus directly on the live FreeWorship Studio interface (`Help > How to Use` -> *Start Live Interface Tour*).
+- **PC & Android Interactive Walkthroughs**: Full 10-step desktop tour and 5-step interactive Android simulator tour explaining how every panel works, how to operate Android remote controls, and how to connect Android to PC over Wi-Fi.
+- **Natural Studio Voice-Over Audio**: Bundled 15 pre-generated natural voice-over clips (`public/tour-audio/pc-01..10.mp3`, `and-01..05.mp3` via `en-US-AndrewMultilingualNeural`) with automatic playback, mute/unmute toggle, and clean caption synchronization—no robotic Web Speech TTS.
+
+### 📱 Android Setup, QR APK Installer & Connection Improvements
+- **Header Android APK Button & Quick Installer Modal**: Added a prominent **Android APK** button in the top bar for fast access to the `.apk` installer, local Wi-Fi server URL, and connection status badge.
+- **Offline Scannable QR Code Download**: Replaced the raw Copy Link button in the Android setup modal with an offline-rendered scannable QR code (`qrcode`) pointing directly to the PC's LAN APK download endpoint (`http://<PC-IP>:5174/FreeWorship-StageController.apk`).
+- **UAC-Elevated Windows Firewall Helper & Live Status Badge**: Upgraded the Windows Firewall helper to request UAC administrator elevation cleanly for TCP ports `5174, 5173` and UDP port `41234`, and display a green **"Already Allowed"** status when rules are active.
+- **UDP + Native Multi-Threaded PC Discovery**: Added a UDP broadcast responder (`port 41234`) on desktop and native Java `scanForPcHosts` in `ApkUpdaterPlugin.java` for fast, reliable PC discovery on local Wi-Fi routers and hotspots.
+- **Live Connection Notifications & Remote Bible/Song Controls**: Added simultaneous connection toast alerts on PC and Android when remote devices join, fixed active remote client counting, dynamic built-in Bible loading for Android scripture requests, custom song creation (`ADD_CUSTOM_SONG_TO_SCHEDULE`), synced translations, and prominent `+ Add Song / Bible` controls.
+
+### 🎨 Pro Desktop UI Redesign, 2nd Monitor Titles & Branding
+- **Official Logo & Splash Branding**: Integrated the official FreeWorship emblem across the titlebar, Electron/Android app icons, logo panic mode (`[L]`), and fixed splashscreen fallback assets.
+- **2nd Monitor & Live Program Captions**: Added Song Title and Scripture Book/Chapter:Verse caption overlays on the 2nd Screen projector and Live Program monitor, and removed amber `isNext` slide highlighting so only the active `ON AIR` slide stands out.
+- **Compact 36px Titlebar with Native Desktop Menus**:
+  - Replaced the crowded 48px header button cluster with an ultra-sleek 36px VS Code-style titlebar.
+  - Added desktop-standard pull-down text menus (**File**, **Output**, **View**, **Tools**, **Help**) with hover-switching, outside-click dismissal, and keyboard navigation.
+  - **File Menu**: Quick actions for `New Schedule`, `Load Schedule...` (`Ctrl+O`), `Save Schedule...` (`Ctrl+S`), `Import/Export Library`, and `Clear Schedule`.
+  - **Output Menu**: 1-click launchers for `Projector (Screen 2)`, `Stage Confidence Monitor (Screen 3)`, desktop 3rd monitor on/off toggle, `OBS / Stream Lower-Thirds`, and `Display Routing & Text Boundaries`.
+  - **View Menu**: Workspace layout switchers (`Side-by-Side Split`, `Single Live`, `Single Preview`), deck card view modes (`Grid` vs `List`), and 1-click interface theme picker (`Dark`, `Dark Gray`, `Gray`, `Light`).
+  - **Tools Menu**: Android remote Wi-Fi setup & connection counter, spontaneous Quick Slide generator, Theme Studio, and panic resets.
+  - **Help Menu**: Interactive **How to Use** manual & live tour, keyboard shortcuts reference (`?`), check for updates dialog, and GitHub release links.
+- **Centered Emergency Panic Control Deck**: High-visibility **[B] Blackout**, **[L] Logo**, and **[C] Clear Text** pills with glowing live state feedback and **Restore [Esc]**.
+- **Word Simplification & Badge Streamlining**: Streamlined `SONG PREVIEW` $\rightarrow$ `PREVIEW` and `LIVE: SONG` $\rightarrow$ `LIVE`, reclaiming over 80px of horizontal title room.
+
+---
+
 ## [1.1.7] — November 9, 2026
 
 ### 🚀 Highlights & Major Features

@@ -1,6 +1,15 @@
 import { SongItem, BibleVerse, MediaAsset, ThemeTemplate, ScheduleItem } from '../types/worship';
+import { APP_LOGO } from '../assets/logo';
 
 export const DEFAULT_MEDIA_POOL: MediaAsset[] = [
+  {
+    id: 'default-freeworship-logo',
+    name: 'FreeWorship Sanctuary Logo',
+    category: 'Logo / Graphic',
+    type: 'image',
+    mediaUrl: APP_LOGO,
+    previewGradient: 'linear-gradient(135deg, #0284c7 0%, #1e1b4b 50%, #d97706 100%)',
+  },
   {
     id: 'bg-aurora',
     name: 'Heavenly Aurora Drift',

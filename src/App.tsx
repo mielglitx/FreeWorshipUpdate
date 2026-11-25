@@ -45,6 +45,10 @@ import {
   FolderOpen,
   Save,
   Smartphone,
+  ExternalLink,
+  Wifi,
+  CheckCircle2,
+  X,
 } from 'lucide-react';
 import {
   BIBLE_DATABASE,
@@ -56,9 +60,11 @@ import {
 import {
   AudioTrackItem,
   BibleVerse,
+  LanConnectionEvent,
   LiveBroadcastPayload,
   MediaAsset,
   MultiScreenRoutingSettings,
+  RemoteControlAction,
   ScheduleItem,
   Slide,
   SlideTransitionType,
@@ -108,6 +114,13 @@ import { ThemeDesignerModal } from './components/ThemeDesignerModal';
 import { DisplaySettingsModal } from './components/DisplaySettingsModal';
 import { ImportExportModal } from './components/ImportExportModal';
 import { LanRemoteModal } from './components/LanRemoteModal';
+import { HowToUseModal } from './components/HowToUseModal';
+import {
+  LiveInterfaceTourOverlay,
+  LiveTourStep,
+  PC_LIVE_TOUR_STEPS,
+} from './components/LiveInterfaceTourOverlay';
+import { APP_LOGO } from './assets/logo';
 import {
   ConfirmDeleteModal,
   markDailyWelcomeShown,
@@ -364,10 +377,46 @@ const OperatorConsole: React.FC = () => {
 
   // Keyboard Shortcuts Help Popover & Import/Export Data Studio Modal
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const [showHowToUseModal, setShowHowToUseModal] = useState(false);
+  const [showLiveTour, setShowLiveTour] = useState(false);
   const [importExportModalOpen, setImportExportModalOpen] = useState(false);
   const [lanRemoteModalOpen, setLanRemoteModalOpen] = useState(false);
   const [headerLanIp, setHeaderLanIp] = useState<string>('');
   const [headerConnectedClients, setHeaderConnectedClients] = useState<number>(0);
+  const [androidToast, setAndroidToast] = useState<{
+    id: number;
+    type: 'connected' | 'disconnected';
+    title: string;
+    subtitle: string;
+  } | null>(null);
+  const prevConnectedClientsRef = useRef<number>(0);
+  const toastTimerRef = useRef<number | null>(null);
+
+  const triggerAndroidConnectionToast = (
+    type: 'connected' | 'disconnected',
+    ip: string,
+    deviceName = 'Android 3rd Monitor'
+  ) => {
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+    const label = deviceName.replace(/-/g, ' ');
+    setAndroidToast({
+      id: Date.now(),
+      type,
+      title:
+        type === 'connected'
+          ? '3rd Monitor (Android) Connected!'
+          : '3rd Monitor (Android) Disconnected',
+      subtitle:
+        type === 'connected'
+          ? `${label} (${ip}) is now live-synced over Wi-Fi`
+          : `${label} (${ip}) left the Wi-Fi session`,
+    });
+    toastTimerRef.current = window.setTimeout(() => {
+      setAndroidToast(null);
+    }, 5500);
+  };
 
   // Poll Local LAN Server status for operator header display
   useEffect(() => {
@@ -378,11 +427,16 @@ const OperatorConsole: React.FC = () => {
         if (valid.length > 0) {
           setHeaderLanIp(`${valid[0]}:${info.port}`);
         }
-        setHeaderConnectedClients(info.connectedClients || 0);
+        const count = info.connectedClients || 0;
+        if (count > prevConnectedClientsRef.current && prevConnectedClientsRef.current === 0) {
+          triggerAndroidConnectionToast('connected', valid[0] || 'Wi-Fi');
+        }
+        prevConnectedClientsRef.current = count;
+        setHeaderConnectedClients(count);
       } catch {}
     };
     updateLanStatus();
-    const timer = window.setInterval(updateLanStatus, 4000);
+    const timer = window.setInterval(updateLanStatus, 2500);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -420,6 +474,30 @@ const OperatorConsole: React.FC = () => {
       localStorage.setItem(STORAGE_KEYS.UI_COLOR_THEME, uiColorTheme);
     } catch {}
   }, [uiColorTheme]);
+
+  // Top Command Bar: VS Code Studio Dropdown Menus ('file' | 'output' | 'view' | 'tools' | 'help' | null)
+  const [openTopMenu, setOpenTopMenu] = useState<'file' | 'output' | 'view' | 'tools' | 'help' | null>(null);
+
+  useEffect(() => {
+    if (!openTopMenu) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target?.closest('[data-top-menubar]')) {
+        setOpenTopMenu(null);
+      }
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpenTopMenu(null);
+      }
+    };
+    window.addEventListener('mousedown', handleOutsideClick);
+    window.addEventListener('keydown', handleKey);
+    return () => {
+      window.removeEventListener('mousedown', handleOutsideClick);
+      window.removeEventListener('keydown', handleKey);
+    };
+  }, [openTopMenu]);
 
   // Multi-Select State (CTRL + Click / Shift + Click) & Right-Click Context Menu
   const [selectedSongIds, setSelectedSongIds] = useState<string[]>([]);
@@ -627,8 +705,20 @@ const OperatorConsole: React.FC = () => {
   }, [currentSlide, activeItem, mediaPool, defaultSongBackgroundId, defaultScriptureBackgroundId]);
 
   const activeLogoAsset: MediaAsset | null = useMemo(() => {
-    if (!defaultLogoMediaId) return null;
-    return mediaPool.find((m) => m.id === defaultLogoMediaId) || null;
+    if (defaultLogoMediaId) {
+      const found = mediaPool.find((m) => m.id === defaultLogoMediaId);
+      if (found) return found;
+    }
+    const defaultAsset = mediaPool.find((m) => m.id === 'default-freeworship-logo');
+    if (defaultAsset) return defaultAsset;
+    return {
+      id: 'default-freeworship-logo',
+      name: 'FreeWorship Official Logo',
+      category: 'Logo / Graphic',
+      type: 'image',
+      mediaUrl: APP_LOGO,
+      previewGradient: 'linear-gradient(135deg, #0284c7 0%, #1e1b4b 50%, #d97706 100%)',
+    };
   }, [defaultLogoMediaId, mediaPool]);
 
   const activeTheme: ThemeTemplate = useMemo(() => {
@@ -713,6 +803,7 @@ const OperatorConsole: React.FC = () => {
   useEffect(() => {
     const payload: LiveBroadcastPayload = {
       activeItemId: activeItem?.id || '',
+      activeItemType: activeItem?.type || 'song',
       activeItemTitle: activeItem?.title || '',
       activeItemSubtitle: activeItem?.subtitle || '',
       activeSlideIndex,
@@ -733,6 +824,7 @@ const OperatorConsole: React.FC = () => {
         musicalKey: s.musicalKey,
         slideCount: s.slides.length,
       })),
+      availableBibleTranslations: availableTranslations,
       background: activeBackground,
       logoAsset: activeLogoAsset,
       theme: activeTheme,
@@ -914,6 +1006,18 @@ const OperatorConsole: React.FC = () => {
         return;
       }
 
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        handleSaveScheduleToFile();
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') {
+        e.preventDefault();
+        scheduleJsonImportInputRef.current?.click();
+        return;
+      }
+
       if (e.code === 'Space' || e.code === 'ArrowRight' || e.code === 'ArrowDown') {
         e.preventDefault();
         goToNextSlide();
@@ -950,121 +1054,185 @@ const OperatorConsole: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   });
 
-  // Subscribe to Remote Control commands sent by the Android 3rd-Monitor + Controller APK over Wi-Fi
-  useEffect(() => {
-    return subscribeRemoteCommands((cmd) => {
-      switch (cmd.action) {
-        case 'NEXT_SLIDE':
-          goToNextSlide();
-          break;
-        case 'PREV_SLIDE':
-          goToPrevSlide();
-          break;
-        case 'SELECT_SLIDE':
-          setActiveSlideIndex(cmd.index);
-          setPanic((prev) => ({ ...prev, blackout: false, logoMode: false }));
-          break;
-        case 'SELECT_ITEM':
-          setActiveItemId(cmd.itemId);
-          setActiveSlideIndex(0);
-          break;
-        case 'TOGGLE_PANIC':
-          setPanic((prev) => ({
-            ...prev,
-            blackout: cmd.key === 'blackout' ? !prev.blackout : false,
-            logoMode: cmd.key === 'logoMode' ? !prev.logoMode : false,
-            clearText: cmd.key === 'clearText' ? !prev.clearText : prev.clearText,
-          }));
-          break;
-        case 'RESTORE_PANIC':
-          setPanic({ blackout: false, logoMode: false, clearText: false });
-          break;
-        case 'TOGGLE_TIMER':
-          setCountdown((prev) => ({ ...prev, running: !prev.running }));
-          break;
-        case 'SET_TIMER':
-          setCountdown((prev) => ({
-            ...prev,
-            secondsRemaining: cmd.minutes * 60,
-            running: true,
-          }));
-          break;
-        case 'SEND_ALERT':
-          setStageAlert({
-            message: cmd.message,
-            active: Boolean(cmd.message.trim()),
-            urgent: cmd.urgent,
-          });
-          break;
-        case 'CLEAR_ALERT':
-          setStageAlert((prev) => ({ ...prev, active: false, message: '' }));
-          break;
-        case 'DELETE_SCHEDULE_ITEM':
-          deleteScheduleItem(cmd.itemId);
-          break;
-        case 'CLEAR_SCHEDULE':
-          setSchedule([]);
-          setActiveItemId('');
-          setActiveSlideIndex(0);
-          break;
-        case 'ADD_SONG_TO_SCHEDULE': {
-          const foundSong = songs.find((s) => s.id === cmd.songId);
-          if (foundSong) {
-            addSongToSchedule(foundSong, Boolean(cmd.goLive));
-          }
-          break;
+  // Subscribe to Remote Control commands & Android connection events over IPC + HTTP
+  const remoteCommandHandlerRef = useRef<(cmd: RemoteControlAction) => void>(() => {});
+  const connectionEventHandlerRef = useRef<(ev: LanConnectionEvent) => void>(() => {});
+
+  remoteCommandHandlerRef.current = async (cmd: RemoteControlAction) => {
+    switch (cmd.action) {
+      case 'NEXT_SLIDE':
+        goToNextSlide();
+        break;
+      case 'PREV_SLIDE':
+        goToPrevSlide();
+        break;
+      case 'SELECT_SLIDE':
+        setActiveSlideIndex(cmd.index);
+        setPanic((prev) => ({ ...prev, blackout: false, logoMode: false }));
+        break;
+      case 'SELECT_ITEM':
+        setActiveItemId(cmd.itemId);
+        setActiveSlideIndex(0);
+        break;
+      case 'TOGGLE_PANIC':
+        setPanic((prev) => ({
+          ...prev,
+          blackout: cmd.key === 'blackout' ? !prev.blackout : false,
+          logoMode: cmd.key === 'logoMode' ? !prev.logoMode : false,
+          clearText: cmd.key === 'clearText' ? !prev.clearText : prev.clearText,
+        }));
+        break;
+      case 'RESTORE_PANIC':
+        setPanic({ blackout: false, logoMode: false, clearText: false });
+        break;
+      case 'TOGGLE_TIMER':
+        setCountdown((prev) => ({ ...prev, running: !prev.running }));
+        break;
+      case 'SET_TIMER':
+        setCountdown((prev) => ({
+          ...prev,
+          secondsRemaining: cmd.minutes * 60,
+          running: true,
+        }));
+        break;
+      case 'SEND_ALERT':
+        setStageAlert({
+          message: cmd.message,
+          active: Boolean(cmd.message.trim()),
+          urgent: cmd.urgent,
+        });
+        break;
+      case 'CLEAR_ALERT':
+        setStageAlert((prev) => ({ ...prev, active: false, message: '' }));
+        break;
+      case 'DELETE_SCHEDULE_ITEM':
+        deleteScheduleItem(cmd.itemId);
+        break;
+      case 'CLEAR_SCHEDULE':
+        setSchedule([]);
+        setActiveItemId('');
+        setActiveSlideIndex(0);
+        break;
+      case 'ADD_SONG_TO_SCHEDULE': {
+        const foundSong = songs.find((s) => s.id === cmd.songId);
+        if (foundSong) {
+          addSongToSchedule(foundSong, Boolean(cmd.goLive));
         }
-        case 'ADD_SCRIPTURE_TO_SCHEDULE': {
-          const parsed = parseScriptureReference(cmd.reference);
-          if (parsed) {
-            const requestedTrans = cmd.translation || selectedTranslation;
-            const transPool =
-              customBibles[requestedTrans] ||
-              BIBLE_DATABASE.filter((v) => v.translation === requestedTrans);
-            const poolToSearch = transPool.length > 0 ? transPool : activeTranslationVerses;
-            const matchedVerses = poolToSearch.filter((v) => {
-              if (v.book.toLowerCase() !== parsed.book.toLowerCase()) return false;
-              if (v.chapter !== parsed.chapter) return false;
-              if (parsed.verseStart !== undefined) {
-                const end = parsed.verseEnd ?? parsed.verseStart;
-                return v.verse >= parsed.verseStart && v.verse <= end;
+        break;
+      }
+      case 'ADD_CUSTOM_SONG_TO_SCHEDULE': {
+        const title = cmd.title.trim() || 'Remote Song';
+        const rawBlocks = cmd.lyrics
+          .split(/\n\s*\n/)
+          .map((b) => b.trim())
+          .filter(Boolean);
+        const slidesToUse: Slide[] = (rawBlocks.length > 0 ? rawBlocks : [cmd.lyrics.trim() || title]).map(
+          (block, idx) => ({
+            id: `remote-sl-${Date.now()}-${idx}`,
+            tag: idx === 0 ? 'Verse 1' : `Slide ${idx + 1}`,
+            lines: block
+              .split('\n')
+              .map((l) => l.trim())
+              .filter(Boolean),
+          })
+        );
+        const newSong: SongItem = {
+          id: `remote-song-${Date.now()}`,
+          title,
+          author: cmd.author?.trim() || 'Added via Android Remote',
+          ccliNumber: '',
+          musicalKey: cmd.musicalKey?.trim() || 'G',
+          slides: slidesToUse,
+        };
+        setSongs((prev) => [newSong, ...prev]);
+        addSongToSchedule(newSong, Boolean(cmd.goLive));
+        break;
+      }
+      case 'ADD_SCRIPTURE_TO_SCHEDULE': {
+        const parsed = parseScriptureReference(cmd.reference);
+        if (parsed) {
+          const requestedTrans = cmd.translation || selectedTranslation;
+          let transPool =
+            customBibles[requestedTrans] && customBibles[requestedTrans].length > 0
+              ? customBibles[requestedTrans]
+              : BIBLE_DATABASE.filter((v) => v.translation === requestedTrans);
+
+          // Dynamically load full 66-book built-in Bible if that translation wasn't opened on PC yet
+          if (
+            (!customBibles[requestedTrans] || customBibles[requestedTrans].length < 50) &&
+            ['KJV', 'NIV', 'NASB', 'ESV', 'MBB 1901'].includes(requestedTrans)
+          ) {
+            try {
+              const loaded = await loadBuiltInBible(requestedTrans);
+              if (loaded && loaded.length > 0) {
+                transPool = loaded;
+                setCustomBibles((prev) => ({ ...prev, [requestedTrans]: loaded }));
               }
-              return true;
-            });
-            if (matchedVerses.length > 0) {
-              sendVerseListToSchedule(matchedVerses, Boolean(cmd.goLive));
-            } else {
-              // Fallback slide if full 66-book verse isn't cached yet
-              const fallbackItem: ScheduleItem = {
-                id: `sched-scr-remote-${Date.now()}`,
-                type: 'scripture',
-                title: `${parsed.book} ${parsed.chapter}${
-                  parsed.verseStart ? `:${parsed.verseStart}` : ''
-                } (${cmd.translation || 'KJV'})`,
-                subtitle: 'Scripture Reading (Remote)',
-                backgroundId: activeBackground.id,
-                themeId: activeTheme.id,
-                slides: [
-                  {
-                    id: `scr-remote-sl-${Date.now()}`,
-                    tag: 'Scripture',
-                    lines: [cmd.reference],
-                    subtext: `${parsed.book} ${parsed.chapter} (KJV)`,
-                  },
-                ],
-              };
-              setSchedule((prev) => [...prev, fallbackItem]);
-              if (cmd.goLive) {
-                setActiveItemId(fallbackItem.id);
-                setActiveSlideIndex(0);
-              }
+            } catch {}
+          }
+
+          const poolToSearch = transPool.length > 0 ? transPool : activeTranslationVerses;
+          const matchedVerses = poolToSearch.filter((v) => {
+            const bookNorm = resolveBookName(v.book).toLowerCase();
+            if (bookNorm !== parsed.book.toLowerCase()) return false;
+            if (v.chapter !== parsed.chapter) return false;
+            if (parsed.verseStart !== undefined) {
+              const end = parsed.verseEnd ?? parsed.verseStart;
+              return v.verse >= parsed.verseStart && v.verse <= end;
+            }
+            return true;
+          });
+
+          if (matchedVerses.length > 0) {
+            sendVerseListToSchedule(matchedVerses, Boolean(cmd.goLive));
+          } else {
+            const verseRefSuffix =
+              parsed.verseStart !== undefined
+                ? parsed.verseEnd && parsed.verseEnd !== parsed.verseStart
+                  ? `:${parsed.verseStart}-${parsed.verseEnd}`
+                  : `:${parsed.verseStart}`
+                : '';
+            const fullRefLabel = `${parsed.book} ${parsed.chapter}${verseRefSuffix} (${requestedTrans})`;
+            const fallbackItem: ScheduleItem = {
+              id: `sched-scr-remote-${Date.now()}`,
+              type: 'scripture',
+              title: fullRefLabel,
+              subtitle: 'Scripture Reading (Remote)',
+              backgroundId: activeBackground.id,
+              themeId: 'theme-scripture-classic',
+              slides: [
+                {
+                  id: `scr-remote-sl-${Date.now()}`,
+                  tag: 'Scripture',
+                  lines: [cmd.reference],
+                  subtext: fullRefLabel,
+                },
+              ],
+            };
+            setSchedule((prev) => [...prev, fallbackItem]);
+            if (cmd.goLive) {
+              setActiveItemId(fallbackItem.id);
+              setActiveSlideIndex(0);
             }
           }
-          break;
         }
+        break;
       }
-    });
-  });
+    }
+  };
+
+  connectionEventHandlerRef.current = (ev: LanConnectionEvent) => {
+    setHeaderConnectedClients(ev.connectedCount);
+    prevConnectedClientsRef.current = ev.connectedCount;
+    triggerAndroidConnectionToast(ev.type, ev.ip, ev.device);
+  };
+
+  useEffect(() => {
+    return subscribeRemoteCommands(
+      (cmd) => remoteCommandHandlerRef.current(cmd),
+      (ev) => connectionEventHandlerRef.current(ev)
+    );
+  }, []);
 
   // Live Quick-Edit Reflow Functions
   const startQuickEdit = (slide: Slide) => {
@@ -1899,7 +2067,7 @@ const OperatorConsole: React.FC = () => {
           <div className="flex items-center gap-2">
             <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-wider border border-emerald-500/40 flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-              <span>LIVE: {activeItem?.type || 'EMPTY'}</span>
+              <span>LIVE</span>
             </span>
             <h2 className="font-bold text-sm lg:text-base text-white truncate">
               {activeItem?.title || 'No Schedule Items'}
@@ -2052,7 +2220,7 @@ const OperatorConsole: React.FC = () => {
           <div className="flex items-center gap-2">
             <span className="px-2 py-0.5 rounded bg-amber-500 text-black text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
               <Eye className="w-3 h-3" />
-              <span>SONG PREVIEW</span>
+              <span>PREVIEW</span>
             </span>
             <h2 className="font-bold text-sm lg:text-base text-white truncate">
               {previewSong?.title || 'No Song Selected'}
@@ -2114,7 +2282,7 @@ const OperatorConsole: React.FC = () => {
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 mr-1">
-            Preview Jump:
+            Jump:
           </span>
           {previewSectionJumpButtons.map(({ tag, index }) => {
             const isCurrentSection = previewSlide?.tag === tag;
@@ -2145,7 +2313,7 @@ const OperatorConsole: React.FC = () => {
 
         <div className="text-[10px] text-slate-400 flex items-center gap-1.5 bg-booth-950 px-2 py-0.5 rounded-lg border border-booth-800">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-          <span>Clicking slide pushes directly to Live View</span>
+          <span>Double-click slide to go live</span>
         </div>
       </div>
     </div>
@@ -2181,7 +2349,6 @@ const OperatorConsole: React.FC = () => {
         >
           {activeItem.slides.map((slide, idx) => {
             const isLive = idx === activeSlideIndex;
-            const isNext = idx === activeSlideIndex + 1;
             const isEditingThis = quickEditSlideId === slide.id;
 
             return (
@@ -2193,8 +2360,6 @@ const OperatorConsole: React.FC = () => {
                 className={`relative rounded-xl border-2 p-3 flex flex-col justify-between transition-all cursor-pointer min-h-[148px] ${
                   isLive
                     ? 'bg-emerald-950/35 border-emerald-400 ring-4 ring-emerald-500/30 shadow-xl'
-                    : isNext
-                    ? 'bg-amber-950/20 border-amber-500/70 hover:border-amber-400'
                     : 'bg-booth-900 border-booth-800 hover:border-booth-600'
                 }`}
               >
@@ -2204,8 +2369,6 @@ const OperatorConsole: React.FC = () => {
                       className={`w-5 h-5 rounded-md flex items-center justify-center font-mono text-[11px] font-black ${
                         isLive
                           ? 'bg-emerald-400 text-black'
-                          : isNext
-                          ? 'bg-amber-500 text-black'
                           : 'bg-booth-800 text-slate-400'
                       }`}
                     >
@@ -2225,11 +2388,6 @@ const OperatorConsole: React.FC = () => {
                       <span className="px-1.5 py-0.5 rounded bg-emerald-500 text-black font-black text-[9px] uppercase tracking-wider flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-black animate-ping" />
                         ON AIR
-                      </span>
-                    )}
-                    {isNext && !isLive && (
-                      <span className="px-1.5 py-0.5 rounded bg-amber-500/30 text-amber-300 font-bold text-[9px] uppercase">
-                        NEXT
                       </span>
                     )}
                     <button
@@ -2315,7 +2473,6 @@ const OperatorConsole: React.FC = () => {
       <div className="space-y-2">
         {activeItem.slides.map((slide, idx) => {
           const isLive = idx === activeSlideIndex;
-          const isNext = idx === activeSlideIndex + 1;
           const isEditingThis = quickEditSlideId === slide.id;
 
           return (
@@ -2327,8 +2484,6 @@ const OperatorConsole: React.FC = () => {
               className={`rounded-xl border-2 p-3 transition-all cursor-pointer flex items-center justify-between gap-3 ${
                 isLive
                   ? 'bg-emerald-950/35 border-emerald-400 ring-2 ring-emerald-400/40 shadow-md'
-                  : isNext
-                  ? 'bg-amber-950/20 border-amber-500/70 hover:border-amber-400'
                   : 'bg-booth-900 border-booth-800 hover:border-booth-600'
               }`}
             >
@@ -2338,8 +2493,6 @@ const OperatorConsole: React.FC = () => {
                   className={`w-6 h-6 rounded flex items-center justify-center font-mono text-xs font-black ${
                     isLive
                       ? 'bg-emerald-400 text-black'
-                      : isNext
-                      ? 'bg-amber-500 text-black'
                       : 'bg-booth-800 text-slate-300'
                   }`}
                 >
@@ -2356,11 +2509,6 @@ const OperatorConsole: React.FC = () => {
                   <span className="px-1.5 py-0.5 rounded bg-emerald-500 text-black font-black text-[9px] uppercase tracking-wider shrink-0 flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-black animate-ping" />
                     ON AIR
-                  </span>
-                )}
-                {isNext && !isLive && (
-                  <span className="px-1.5 py-0.5 rounded bg-amber-500/30 text-amber-300 font-bold text-[9px] uppercase shrink-0">
-                    NEXT
                   </span>
                 )}
               </div>
@@ -2728,202 +2876,789 @@ const OperatorConsole: React.FC = () => {
       />
 
       {/* =====================================================================
-          TOP COMMAND BAR: Branding, Multi-Screen Launchers, and PANIC BUTTONS (Compact 50-80% Scale)
+          TOP COMMAND BAR: VS Code Studio Header (Option 1)
+          Left: FreeWorship Logo + Native Text Menus (File, Output, View, Tools, Help)
+          Center: Emergency Panic Live Controls ([B] Blackout, [L] Logo, [C] Clear)
+          Right: Quick Output Triggers, Remote Status & Layout Controls
          ===================================================================== */}
-      <header className="h-12 bg-booth-900 border-b border-booth-800 px-3 flex items-center justify-between gap-2 shrink-0">
-        {/* Left: App Identity & Live Status */}
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-md shadow-amber-500/20">
-            <Sparkles className="w-3.5 h-3.5 text-black" />
+      <header
+        className="h-9 bg-booth-950/95 border-b border-booth-800 px-2 flex items-center justify-between gap-2 shrink-0 select-none relative z-50 text-xs"
+        data-top-menubar
+      >
+        {/* Left: App Branding & VS Code Native Dropdown Menus */}
+        <div className="flex items-center gap-0.5 shrink-0">
+          {/* Brand Mark with new Logo */}
+          <div className="flex items-center gap-1.5 px-1.5 py-0.5 mr-1 select-none">
+            <img
+              src={APP_LOGO}
+              alt="FreeWorship Logo"
+              className="w-5 h-5 rounded-md object-contain shadow-sm shrink-0"
+              onError={(e) => {
+                const target = e.currentTarget;
+                if (!target.dataset.triedRelative) {
+                  target.dataset.triedRelative = 'true';
+                  target.src = './logo.png';
+                }
+              }}
+            />
+            <span className="font-display font-black tracking-tight text-xs text-white flex items-center">
+              <span className="text-cyan-400">FREE</span>
+              <span>WORSHIP</span>
+            </span>
           </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-display font-black tracking-tight text-sm text-white">
-                FREE<span className="text-amber-400">WORSHIP</span>
-              </span>
-              <span className="px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                LIVE
-              </span>
+
+          {/* Menus Container */}
+          <div data-tour="pc-menus" className="flex items-center gap-0.5">
+            {/* FILE MENU */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setOpenTopMenu(openTopMenu === 'file' ? null : 'file')}
+                onMouseEnter={() => {
+                  if (openTopMenu) setOpenTopMenu('file');
+                }}
+                className={`px-2.5 py-1 rounded text-xs transition font-medium ${
+                  openTopMenu === 'file'
+                    ? 'bg-white/15 text-white'
+                    : 'text-slate-300 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                File
+              </button>
+
+              {openTopMenu === 'file' && (
+                <div className="absolute top-full left-0 mt-1 min-w-[240px] bg-booth-900/98 backdrop-blur-md border border-booth-700/80 rounded-md shadow-2xl py-1 z-50 text-slate-200 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      if (schedule.length > 0 && !window.confirm('Clear current service schedule?')) return;
+                      setSchedule([]);
+                      setActiveItemId('');
+                      setActiveSlideIndex(0);
+                      setScheduleNotice('Service schedule cleared.');
+                      setTimeout(() => setScheduleNotice(null), 3000);
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Plus className="w-3.5 h-3.5 text-slate-400 group-hover:text-amber-300" />
+                      <span>New Schedule</span>
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      scheduleJsonImportInputRef.current?.click();
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group"
+                  >
+                    <span className="flex items-center gap-2">
+                      <FolderOpen className="w-3.5 h-3.5 text-slate-400 group-hover:text-amber-300" />
+                      <span>Load Schedule...</span>
+                    </span>
+                    <kbd className="text-[10px] text-slate-400 font-mono">Ctrl+O</kbd>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      handleSaveScheduleToFile();
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Save className="w-3.5 h-3.5 text-slate-400 group-hover:text-amber-300" />
+                      <span>Save Schedule...</span>
+                    </span>
+                    <kbd className="text-[10px] text-slate-400 font-mono">Ctrl+S</kbd>
+                  </button>
+
+                  <div className="my-1 border-t border-booth-800" />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      setImportExportModalOpen(true);
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Database className="w-3.5 h-3.5 text-slate-400 group-hover:text-amber-300" />
+                      <span>Import / Export Library & Backup...</span>
+                    </span>
+                  </button>
+
+                  <div className="my-1 border-t border-booth-800" />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      if (window.confirm('Remove all items from current schedule?')) {
+                        setSchedule([]);
+                        setActiveItemId('');
+                        setActiveSlideIndex(0);
+                      }
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-red-500/20 hover:text-red-300 text-left transition group text-red-400"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Clear Schedule</span>
+                    </span>
+                  </button>
+                </div>
+              )}
             </div>
-            <p className="text-[10px] text-slate-400 hidden 2xl:block leading-none">
-              Multi-Monitor Worship Suite
-            </p>
+
+            {/* OUTPUT MENU */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setOpenTopMenu(openTopMenu === 'output' ? null : 'output')}
+                onMouseEnter={() => {
+                  if (openTopMenu) setOpenTopMenu('output');
+                }}
+                className={`px-2.5 py-1 rounded text-xs transition font-medium ${
+                  openTopMenu === 'output'
+                    ? 'bg-white/15 text-white'
+                    : 'text-slate-300 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                Output
+              </button>
+
+              {openTopMenu === 'output' && (
+                <div className="absolute top-full left-0 mt-1 min-w-[270px] bg-booth-900/98 backdrop-blur-md border border-booth-700/80 rounded-md shadow-2xl py-1 z-50 text-slate-200 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      openExternalDisplayWindow('projector', routingSettings);
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Monitor className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Launch 2nd Screen (Projector)</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono">F11 / Screen 2</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      openExternalDisplayWindow('stage', routingSettings);
+                    }}
+                    disabled={routingSettings.enableStageMonitor === false}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group disabled:opacity-40"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Tv className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Launch 3rd Screen (Stage Confidence)</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono">Screen 3</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      handleUpdateRouting({
+                        ...routingSettings,
+                        enableStageMonitor: routingSettings.enableStageMonitor === false ? true : false,
+                      });
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Check
+                        className={`w-3.5 h-3.5 ${
+                          routingSettings.enableStageMonitor !== false
+                            ? 'text-emerald-400 opacity-100'
+                            : 'opacity-0'
+                        }`}
+                      />
+                      <span>Desktop 3rd Screen Enabled</span>
+                    </span>
+                    <span
+                      className={`text-[10px] font-bold uppercase ${
+                        routingSettings.enableStageMonitor !== false ? 'text-emerald-400' : 'text-slate-500'
+                      }`}
+                    >
+                      {routingSettings.enableStageMonitor !== false ? 'ON' : 'OFF'}
+                    </span>
+                  </button>
+
+                  <div className="my-1 border-t border-booth-800" />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      openExternalDisplayWindow('stream', routingSettings);
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Radio className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Launch OBS / Stream Lower-Thirds</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono">Overlay</span>
+                  </button>
+
+                  <div className="my-1 border-t border-booth-800" />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      setDisplaySettingsTab('screens');
+                      setDisplaySettingsOpen(true);
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Sliders className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Display Routing & Text Boundaries...</span>
+                    </span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* VIEW MENU */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setOpenTopMenu(openTopMenu === 'view' ? null : 'view')}
+                onMouseEnter={() => {
+                  if (openTopMenu) setOpenTopMenu('view');
+                }}
+                className={`px-2.5 py-1 rounded text-xs transition font-medium ${
+                  openTopMenu === 'view'
+                    ? 'bg-white/15 text-white'
+                    : 'text-slate-300 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                View
+              </button>
+
+              {openTopMenu === 'view' && (
+                <div className="absolute top-full left-0 mt-1 min-w-[240px] bg-booth-900/98 backdrop-blur-md border border-booth-700/80 rounded-md shadow-2xl py-1 z-50 text-slate-200 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      setCenterLayoutMode('side-by-side');
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Check
+                        className={`w-3.5 h-3.5 ${
+                          centerLayoutMode === 'side-by-side' ? 'text-amber-400 opacity-100' : 'opacity-0'
+                        }`}
+                      />
+                      <span>Side-by-Side (Split Deck)</span>
+                    </span>
+                    <Columns className="w-3.5 h-3.5 text-slate-400 group-hover:text-amber-300" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      setCenterLayoutMode('live');
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Check
+                        className={`w-3.5 h-3.5 ${
+                          centerLayoutMode === 'live' ? 'text-emerald-400 opacity-100' : 'opacity-0'
+                        }`}
+                      />
+                      <span>Single View: Live Deck</span>
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      setCenterLayoutMode('preview');
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Check
+                        className={`w-3.5 h-3.5 ${
+                          centerLayoutMode === 'preview' ? 'text-amber-400 opacity-100' : 'opacity-0'
+                        }`}
+                      />
+                      <span>Single View: Preview Deck</span>
+                    </span>
+                  </button>
+
+                  <div className="my-1 border-t border-booth-800" />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      setSlideDeckViewMode('grid');
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Check
+                        className={`w-3.5 h-3.5 ${
+                          slideDeckViewMode === 'grid' ? 'text-amber-400 opacity-100' : 'opacity-0'
+                        }`}
+                      />
+                      <span>Slide Deck: Grid View</span>
+                    </span>
+                    <LayoutGrid className="w-3.5 h-3.5 text-slate-400" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      setSlideDeckViewMode('list');
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Check
+                        className={`w-3.5 h-3.5 ${
+                          slideDeckViewMode === 'list' ? 'text-amber-400 opacity-100' : 'opacity-0'
+                        }`}
+                      />
+                      <span>Slide Deck: List View</span>
+                    </span>
+                    <List className="w-3.5 h-3.5 text-slate-400" />
+                  </button>
+
+                  <div className="my-1 border-t border-booth-800" />
+
+                  <div className="px-3 py-1 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                    Interface Theme
+                  </div>
+
+                  {(['dark', 'dark-gray', 'gray', 'light'] as UiColorTheme[]).map((theme) => (
+                    <button
+                      key={theme}
+                      type="button"
+                      onClick={() => {
+                        setOpenTopMenu(null);
+                        setUiColorTheme(theme);
+                      }}
+                      className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group capitalize"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Check
+                          className={`w-3.5 h-3.5 ${
+                            uiColorTheme === theme ? 'text-amber-400 opacity-100' : 'opacity-0'
+                          }`}
+                        />
+                        <span>{theme.replace('-', ' ')}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* TOOLS MENU */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setOpenTopMenu(openTopMenu === 'tools' ? null : 'tools')}
+                onMouseEnter={() => {
+                  if (openTopMenu) setOpenTopMenu('tools');
+                }}
+                className={`px-2.5 py-1 rounded text-xs transition font-medium ${
+                  openTopMenu === 'tools'
+                    ? 'bg-white/15 text-white'
+                    : 'text-slate-300 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                Tools
+              </button>
+
+              {openTopMenu === 'tools' && (
+                <div className="absolute top-full left-0 mt-1 min-w-[260px] bg-booth-900/98 backdrop-blur-md border border-booth-700/80 rounded-md shadow-2xl py-1 z-50 text-slate-200 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      setLanRemoteModalOpen(true);
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Smartphone className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Android Remote & Wi-Fi Setup...</span>
+                    </span>
+                    {headerConnectedClients > 0 && (
+                      <span className="text-[10px] text-emerald-400 font-bold">
+                        {headerConnectedClients} connected
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      setShowQuickSlideModal(true);
+                    }}
+                    disabled={!activeItem}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group disabled:opacity-40"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Zap className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Spontaneous Quick Slide...</span>
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      setEditingTheme(null);
+                      setThemeModalOpen(true);
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Palette className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Theme Designer Studio...</span>
+                    </span>
+                  </button>
+
+                  <div className="my-1 border-t border-booth-800" />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      setPanic({ blackout: false, logoMode: false, clearText: false });
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Reset All Panic Overrides</span>
+                    </span>
+                    <kbd className="text-[10px] text-slate-400 font-mono">Esc</kbd>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* HELP MENU */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setOpenTopMenu(openTopMenu === 'help' ? null : 'help')}
+                onMouseEnter={() => {
+                  if (openTopMenu) setOpenTopMenu('help');
+                }}
+                className={`px-2.5 py-1 rounded text-xs transition font-medium ${
+                  openTopMenu === 'help'
+                    ? 'bg-white/15 text-white'
+                    : 'text-slate-300 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                Help
+              </button>
+
+              {openTopMenu === 'help' && (
+                <div className="absolute top-full left-0 mt-1 min-w-[270px] bg-booth-900/98 backdrop-blur-md border border-booth-700/80 rounded-md shadow-2xl py-1 z-50 text-slate-200 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      setCenterLayoutMode('side-by-side');
+                      setLeftTab('songs');
+                      setShowLiveTour(true);
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-emerald-500/20 hover:text-emerald-300 text-left transition group font-bold"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Play className="w-3.5 h-3.5 text-emerald-400 fill-current" />
+                      <span>How to Use (Live App Tour + Voice)</span>
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      setShowHowToUseModal(true);
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group"
+                  >
+                    <span className="flex items-center gap-2">
+                      <BookOpen className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Written User Guide &amp; Diagrams...</span>
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      setShowShortcutsModal(true);
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group"
+                  >
+                    <span className="flex items-center gap-2">
+                      <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Keyboard Shortcuts Guide...</span>
+                    </span>
+                    <kbd className="text-[10px] text-slate-400 font-mono">?</kbd>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      setShowWelcomeModal(true);
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Heart className="w-3.5 h-3.5 text-red-400" />
+                      <span>Check Updates & About FreeWorship...</span>
+                    </span>
+                  </button>
+
+                  <div className="my-1 border-t border-booth-800" />
+
+                  <a
+                    href="https://github.com/mielglitx/FreeWorshipUpdate"
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => setOpenTopMenu(null)}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group text-slate-300"
+                  >
+                    <span className="flex items-center gap-2">
+                      <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-amber-300" />
+                      <span>GitHub Releases & Downloads</span>
+                    </span>
+                  </a>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Center: EMERGENCY PANIC BUTTONS (Compact 60% Scale) */}
-        <div className="flex items-center gap-1 bg-booth-950 p-1 rounded-lg border border-booth-800 shrink-0">
+        {/* Center: Sleek Live Panic Controls ([B] Blackout, [L] Logo, [C] Clear) */}
+        <div
+          data-tour="pc-panic"
+          className="flex items-center gap-1 bg-booth-900/60 p-0.5 rounded-lg border border-booth-800/80 shrink-0"
+        >
           <button
+            type="button"
             onClick={() =>
               setPanic((prev) => ({ ...prev, blackout: !prev.blackout, logoMode: false }))
             }
             title="Shortcut: [B] — Instantly blacks out the main projector output"
-            className={`px-2.5 py-1 rounded-md font-bold text-[11px] uppercase tracking-wide flex items-center gap-1.5 transition-all ${
+            className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition ${
               panic.blackout
                 ? 'bg-red-600 text-white shadow-md shadow-red-600/40 ring-1 ring-red-300 animate-pulse'
-                : 'bg-booth-850 hover:bg-booth-800 text-slate-200 border border-booth-700'
+                : 'bg-booth-850 hover:bg-booth-800 text-slate-300 border border-booth-750 hover:text-white'
             }`}
           >
-            <EyeOff className="w-3.5 h-3.5" />
+            <EyeOff className="w-3 h-3" />
             <span>Blackout</span>
-            <kbd className="px-1 py-0.2 text-[9px] font-mono rounded bg-black/40 text-slate-300">B</kbd>
+            <kbd className="px-1 text-[9px] font-mono rounded bg-black/40 text-slate-300">B</kbd>
           </button>
 
           <button
+            type="button"
             onClick={() =>
               setPanic((prev) => ({ ...prev, logoMode: !prev.logoMode, blackout: false }))
             }
             title="Shortcut: [L] — Switches display to Sanctuary Logo & Background Loop"
-            className={`px-2.5 py-1 rounded-md font-bold text-[11px] uppercase tracking-wide flex items-center gap-1.5 transition-all ${
+            className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition ${
               panic.logoMode
                 ? 'bg-amber-500 text-black shadow-md shadow-amber-500/40 ring-1 ring-amber-200'
-                : 'bg-booth-850 hover:bg-booth-800 text-slate-200 border border-booth-700'
+                : 'bg-booth-850 hover:bg-booth-800 text-slate-300 border border-booth-750 hover:text-white'
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5" />
+            <Sparkles className="w-3 h-3" />
             <span>Logo</span>
-            <kbd className="px-1 py-0.2 text-[9px] font-mono rounded bg-black/40 text-slate-300">L</kbd>
+            <kbd className="px-1 text-[9px] font-mono rounded bg-black/40 text-slate-300">L</kbd>
           </button>
 
           <button
+            type="button"
             onClick={() => setPanic((prev) => ({ ...prev, clearText: !prev.clearText }))}
             title="Shortcut: [C] — Clears lyrics while keeping the motion background playing"
-            className={`px-2.5 py-1 rounded-md font-bold text-[11px] uppercase tracking-wide flex items-center gap-1.5 transition-all ${
+            className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition ${
               panic.clearText
                 ? 'bg-sky-500 text-black shadow-md shadow-sky-500/40 ring-1 ring-sky-200'
-                : 'bg-booth-850 hover:bg-booth-800 text-slate-200 border border-booth-700'
+                : 'bg-booth-850 hover:bg-booth-800 text-slate-300 border border-booth-750 hover:text-white'
             }`}
           >
-            <Type className="w-3.5 h-3.5" />
-            <span>Clear Text</span>
-            <kbd className="px-1 py-0.2 text-[9px] font-mono rounded bg-black/40 text-slate-300">C</kbd>
+            <Type className="w-3 h-3" />
+            <span>Clear</span>
+            <kbd className="px-1 text-[9px] font-mono rounded bg-black/40 text-slate-300">C</kbd>
           </button>
 
           {(panic.blackout || panic.logoMode || panic.clearText) && (
             <button
+              type="button"
               onClick={() => setPanic({ blackout: false, logoMode: false, clearText: false })}
-              className="px-2 py-1 rounded-md font-bold text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white"
+              className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1 transition"
+              title="Restore Live Output (Esc)"
             >
-              Restore [Esc]
+              <span>Restore</span>
+              <kbd className="px-1 text-[9px] font-mono rounded bg-black/30">Esc</kbd>
             </button>
           )}
         </div>
 
-        {/* Right: Multi-Display Output Launchers (Compact 50-70% Scale) */}
+        {/* Right: Output Triggers, Remote Status & VS Code Layout Controls */}
         <div className="flex items-center gap-1 shrink-0">
+          {/* Quick 2nd Screen Launcher */}
           <button
+            data-tour="pc-screens"
+            type="button"
             onClick={() => openExternalDisplayWindow('projector', routingSettings)}
-            className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] flex items-center gap-1 shadow transition"
-            title="Launch borderless fullscreen Projector Output directly onto Screen 2"
+            className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 transition shadow-sm"
+            title="Launch Projector Output on Screen 2"
           >
-            <Monitor className="w-3.5 h-3.5" />
-            <span>2nd Screen</span>
+            <Monitor className="w-3 h-3 text-emerald-400" />
+            <span className="hidden sm:inline">2nd Screen</span>
           </button>
 
-          <div className="flex items-center rounded-lg border border-amber-500/40 bg-booth-850 overflow-hidden">
+          {/* Quick 3rd Screen Launcher (if enabled) */}
+          {routingSettings.enableStageMonitor !== false && (
             <button
+              type="button"
               onClick={() => openExternalDisplayWindow('stage', routingSettings)}
-              disabled={routingSettings.enableStageMonitor === false}
-              className="px-2 py-1 hover:bg-booth-700 disabled:opacity-40 disabled:pointer-events-none text-amber-300 font-bold text-[11px] flex items-center gap-1 transition"
-              title={
-                routingSettings.enableStageMonitor === false
-                  ? 'Desktop 3rd Screen is disabled (click ON/OFF toggle to enable)'
-                  : 'Launch borderless fullscreen Stage Confidence Monitor directly onto Screen 3'
-              }
+              className="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 flex items-center gap-1.5 transition shadow-sm"
+              title="Launch Stage Confidence Monitor on Screen 3"
             >
-              <Tv className="w-3.5 h-3.5" />
-              <span>3rd Screen</span>
+              <Tv className="w-3 h-3 text-amber-400" />
+              <span className="hidden xl:inline">3rd Screen</span>
             </button>
+          )}
+
+          {/* Accessible Android APK & 3rd Monitor Quick Button */}
+          <button
+            data-tour="pc-android-btn"
+            type="button"
+            onClick={() => setLanRemoteModalOpen(true)}
+            className={`px-2 py-0.5 rounded text-[11px] font-bold border flex items-center gap-1.5 relative transition shadow-sm ${
+              headerConnectedClients > 0
+                ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30'
+                : 'bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border-sky-500/35'
+            }`}
+            title={`Download Android APK & Connect 3rd Monitor (${headerLanIp || 'Wi-Fi'})${
+              headerConnectedClients > 0 ? ` • ${headerConnectedClients} Connected` : ''
+            }`}
+          >
+            <Smartphone className="w-3 h-3" />
+            <span className="hidden sm:inline">
+              {headerConnectedClients > 0
+                ? `Android (${headerConnectedClients})`
+                : 'Android APK'}
+            </span>
+            {headerConnectedClients > 0 && (
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            )}
+          </button>
+
+          {/* OBS Stream Overlay Quick Icon */}
+          <button
+            type="button"
+            onClick={() => openExternalDisplayWindow('stream', routingSettings)}
+            className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-sky-300 transition"
+            title="Launch Transparent Lower-Thirds Overlay for OBS / vMix / NDI"
+          >
+            <Radio className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Divider */}
+          <div className="h-4 w-px bg-booth-800 mx-0.5" />
+
+          {/* Layout Controls (VS Code Style) */}
+          <div className="flex items-center bg-booth-900 rounded p-0.5 border border-booth-800">
             <button
-              onClick={() =>
-                handleUpdateRouting({
-                  ...routingSettings,
-                  enableStageMonitor: routingSettings.enableStageMonitor === false ? true : false,
-                })
-              }
-              className={`px-1.5 py-1 text-[9px] font-black uppercase border-l border-booth-700 transition ${
-                routingSettings.enableStageMonitor !== false
-                  ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30'
-                  : 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
+              type="button"
+              onClick={() => setCenterLayoutMode('side-by-side')}
+              className={`p-1 rounded transition ${
+                centerLayoutMode === 'side-by-side'
+                  ? 'bg-amber-500 text-black shadow-sm font-bold'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
-              title="Enable or Disable Desktop 3rd Monitor (disable when only 2nd monitor is connected or when using Android APK as 3rd monitor)"
+              title="Split View: Side-by-Side (Preview & Live)"
             >
-              {routingSettings.enableStageMonitor !== false ? '3rd: ON' : '3rd: OFF'}
+              <Columns className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCenterLayoutMode('live')}
+              className={`px-1.5 py-0.5 rounded text-[10px] font-black uppercase transition ${
+                centerLayoutMode === 'live'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`}
+              title="Single View: Live Only"
+            >
+              Live
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCenterLayoutMode('preview')}
+              className={`px-1.5 py-0.5 rounded text-[10px] font-black uppercase transition ${
+                centerLayoutMode === 'preview'
+                  ? 'bg-amber-500 text-black shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`}
+              title="Single View: Preview Only"
+            >
+              Prev
             </button>
           </div>
 
+          {/* Divider */}
+          <div className="h-4 w-px bg-booth-800 mx-0.5" />
+
+          {/* Display & Text Boundary Settings Modal */}
           <button
+            type="button"
             onClick={() => {
               setDisplaySettingsTab('screens');
               setDisplaySettingsOpen(true);
             }}
-            className="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-black text-[11px] flex items-center gap-1 shadow transition"
-            title="Configure 2nd & 3rd Monitor Routing, Fonts, Word Wrapping, and Text Boundary Box"
+            className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-white transition"
+            title="Display Routing & Text Boundaries"
           >
             <Sliders className="w-3.5 h-3.5" />
-            <span>Displays</span>
           </button>
 
+          {/* Help / Shortcuts Button */}
           <button
-            onClick={() => setImportExportModalOpen(true)}
-            className="px-2 py-1 rounded-lg bg-booth-800 hover:bg-booth-700 text-emerald-300 border border-emerald-500/40 font-bold text-[11px] flex items-center gap-1 transition"
-            title="Import or Export Songs, 66-Book Bibles, Service Schedules, and Display/Boundary Settings"
-          >
-            <Database className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Import/Export</span>
-          </button>
-
-          <button
-            onClick={() => setLanRemoteModalOpen(true)}
-            className="px-2 py-1 rounded-lg bg-booth-850 hover:bg-booth-800 border border-amber-500/40 text-amber-300 font-bold text-[11px] flex items-center gap-1 transition shadow"
-            title={`Android 3rd Monitor & Remote Controller Wi-Fi Connection Details${headerLanIp ? ` (${headerLanIp})` : ''}`}
-          >
-            <Smartphone className="w-3.5 h-3.5 text-amber-400" />
-            <span>Remote</span>
-            {headerConnectedClients > 0 && (
-              <span
-                className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"
-                title={`${headerConnectedClients} Android device(s) connected`}
-              />
-            )}
-          </button>
-
-          <button
-            onClick={() => openExternalDisplayWindow('stream', routingSettings)}
-            className="px-2 py-1 rounded-lg bg-booth-800 hover:bg-booth-700 text-sky-300 border border-sky-500/40 font-bold text-[11px] flex items-center gap-1 transition"
-            title="Open Transparent Lower-Thirds Overlay for OBS / vMix / NDI"
-          >
-            <Radio className="w-3.5 h-3.5" />
-            <span>OBS</span>
-          </button>
-
-          {/* App UI Color Theme Selector (Light, Gray, Dark Gray, Dark) */}
-          <select
-            value={uiColorTheme}
-            onChange={(e) => setUiColorTheme(e.target.value as UiColorTheme)}
-            className="px-1.5 py-1 bg-booth-850 hover:bg-booth-800 text-slate-200 border border-booth-700 font-bold text-[10px] rounded-lg focus:outline-none cursor-pointer"
-            title="Switch App UI Color Theme (Light, Gray, Dark Gray, Dark)"
-          >
-            <option value="dark">Dark</option>
-            <option value="dark-gray">Dark Gray</option>
-            <option value="gray">Gray</option>
-            <option value="light">Light</option>
-          </select>
-
-          <button
-            onClick={() => setShowWelcomeModal(true)}
-            className="px-2 py-1 rounded-lg bg-booth-850 hover:bg-booth-800 text-amber-300 border border-amber-500/40 font-bold text-[11px] flex items-center gap-1 transition"
-            title="About FreeWorship, Version Updates & GCash Donation Info"
-          >
-            <Heart className="w-3 h-3 text-amber-400" />
-            <span className="hidden xl:inline">About</span>
-          </button>
-
-          <button
+            type="button"
             onClick={() => setShowShortcutsModal(true)}
-            className="p-1 rounded-lg bg-booth-850 hover:bg-booth-800 text-slate-300 border border-booth-700"
-            title="Keyboard Shortcuts & Booth Guide"
+            className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-white transition"
+            title="Keyboard Shortcuts & Booth Guide (?)"
           >
             <HelpCircle className="w-3.5 h-3.5" />
           </button>
@@ -2939,7 +3674,10 @@ const OperatorConsole: React.FC = () => {
            ------------------------------------------------------------------- */}
         <aside className="col-span-3 bg-booth-900 border-r border-booth-800 flex flex-col min-h-0">
           {/* Library Category Tabs (5 Tabs) */}
-          <div className="grid grid-cols-5 gap-1 p-1.5 bg-booth-950 border-b border-booth-800">
+          <div
+            data-tour="pc-left-tabs"
+            className="grid grid-cols-5 gap-1 p-1.5 bg-booth-950 border-b border-booth-800"
+          >
             <button
               onClick={() => setLeftTab('songs')}
               className={`py-2 px-1 rounded-lg text-[11px] font-bold flex flex-col items-center gap-1 transition ${
@@ -3076,7 +3814,7 @@ const OperatorConsole: React.FC = () => {
                 </div>
               )}
 
-              <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+              <div data-tour="pc-song-list" className="flex-1 overflow-y-auto space-y-2 pr-1">
                 {filteredSongs.map((song, idx) => {
                   const isMultiSelected = selectedSongIds.includes(song.id);
                   const isPreviewActive = previewSong?.id === song.id;
@@ -3378,7 +4116,7 @@ const OperatorConsole: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+              <div data-tour="pc-song-list" className="flex-1 overflow-y-auto space-y-2 pr-1">
                 {filteredVerses.map((v, idx) => {
                   const vKey = getVerseKey(v);
                   const isMultiSelected = selectedVerseKeys.includes(vKey);
@@ -3913,7 +4651,7 @@ const OperatorConsole: React.FC = () => {
                 title="Single View: Live Service presentation controls"
               >
                 <span className="w-2 h-2 rounded-full bg-red-400 animate-ping" />
-                <span>Live View</span>
+                <span>Live</span>
                 {activeItem && (
                   <span className="max-w-[110px] truncate text-[11px] opacity-85">
                     ({activeItem.title})
@@ -3991,7 +4729,10 @@ const OperatorConsole: React.FC = () => {
           {centerLayoutMode === 'side-by-side' ? (
             <div className="flex-1 min-h-0 grid grid-cols-2 divide-x divide-booth-800 overflow-hidden">
               {/* Left Column: Preview View */}
-              <div className="flex flex-col min-h-0 overflow-hidden bg-booth-950/60">
+              <div
+                data-tour="pc-preview-deck"
+                className="flex flex-col min-h-0 overflow-hidden bg-booth-950/60"
+              >
                 {renderPreviewHeader(true)}
                 <div className="flex-1 overflow-y-auto p-3">
                   {renderPreviewSlideDeck(true)}
@@ -3999,7 +4740,10 @@ const OperatorConsole: React.FC = () => {
               </div>
 
               {/* Right Column: Live Service View */}
-              <div className="flex flex-col min-h-0 overflow-hidden bg-booth-950">
+              <div
+                data-tour="pc-live-deck"
+                className="flex flex-col min-h-0 overflow-hidden bg-booth-950"
+              >
                 {renderLiveHeader(true)}
                 <div className="flex-1 overflow-y-auto p-3">
                   {renderLiveSlideDeck(true)}
@@ -4025,7 +4769,7 @@ const OperatorConsole: React.FC = () => {
           {/* Bottom Dual Broadcast Monitors: LIVE PROGRAM OUTPUT vs NEXT CUED / SELECTED SONG PREVIEW */}
           <div className="h-60 bg-booth-900 border-t border-booth-800 p-3 grid grid-cols-2 gap-4 shrink-0">
             {/* LIVE PROGRAM MONITOR */}
-            <div className="flex flex-col min-h-0">
+            <div data-tour="pc-program-monitor" className="flex flex-col min-h-0">
               <div className="flex items-center justify-between mb-1.5">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
@@ -4049,6 +4793,8 @@ const OperatorConsole: React.FC = () => {
                   logoSubtitle={logoSubtitle}
                   stageAlert={stageAlert}
                   scaleMode="preview"
+                  itemTitle={activeItem?.title}
+                  itemType={activeItem?.type}
                 />
               </div>
             </div>
@@ -4060,7 +4806,7 @@ const OperatorConsole: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-amber-400" />
                     <span className="text-xs font-black uppercase tracking-wider text-amber-300 truncate">
-                      SONG PREVIEW: {previewSong.title}
+                      PREVIEW: {previewSong.title}
                     </span>
                   </div>
                   <span className="text-[11px] text-slate-400 font-mono shrink-0">
@@ -4080,6 +4826,8 @@ const OperatorConsole: React.FC = () => {
                     logoTitle={logoTitle}
                     logoSubtitle={logoSubtitle}
                     scaleMode="preview"
+                    itemTitle={previewSong.title}
+                    itemType="song"
                   />
                   <div className="absolute bottom-2 right-2 bg-emerald-600 hover:bg-emerald-500 border border-white/30 text-white text-[10px] font-black px-2.5 py-1 rounded shadow flex items-center gap-1">
                     <Play className="w-3 h-3 fill-current" />
@@ -4127,6 +4875,7 @@ const OperatorConsole: React.FC = () => {
             RIGHT PANEL (3 cols): Service Schedule (Run-of-Show) + Stage Messaging
            ------------------------------------------------------------------- */}
         <aside
+          data-tour="pc-schedule"
           onDragOver={(e) => {
             e.preventDefault();
             if (!isDraggingOverSchedule) setIsDraggingOverSchedule(true);
@@ -4734,6 +5483,80 @@ const OperatorConsole: React.FC = () => {
           isOpen={lanRemoteModalOpen}
           onClose={() => setLanRemoteModalOpen(false)}
         />
+      )}
+
+      {showHowToUseModal && (
+        <HowToUseModal
+          isOpen={showHowToUseModal}
+          onClose={() => setShowHowToUseModal(false)}
+          onOpenAndroidSetup={() => setLanRemoteModalOpen(true)}
+          onStartLiveTour={() => {
+            setShowHowToUseModal(false);
+            setCenterLayoutMode('side-by-side');
+            setLeftTab('songs');
+            setShowLiveTour(true);
+          }}
+        />
+      )}
+
+      {showLiveTour && (
+        <LiveInterfaceTourOverlay
+          isOpen={showLiveTour}
+          steps={PC_LIVE_TOUR_STEPS.map((st): LiveTourStep => ({
+            ...st,
+            onEnter: () => {
+              if (st.id === 'pc-05' || st.id === 'pc-06') {
+                setLeftTab('songs');
+              } else if (st.id === 'pc-07' || st.id === 'pc-08') {
+                setCenterLayoutMode('side-by-side');
+              }
+            },
+          }))}
+          onClose={() => setShowLiveTour(false)}
+          onOpenWrittenGuide={() => setShowHowToUseModal(true)}
+        />
+      )}
+
+      {/* Windows PC Android 3rd Monitor Connection Toast Notification */}
+      {androidToast && (
+        <div
+          key={androidToast.id}
+          className={`fixed bottom-5 right-5 z-[110] max-w-sm rounded-2xl border-2 p-3.5 shadow-2xl flex items-start gap-3 animate-fade-in ${
+            androidToast.type === 'connected'
+              ? 'bg-emerald-950/95 border-emerald-400 text-emerald-100'
+              : 'bg-amber-950/95 border-amber-400 text-amber-100'
+          }`}
+        >
+          <div
+            className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+              androidToast.type === 'connected'
+                ? 'bg-emerald-500 text-black'
+                : 'bg-amber-500 text-black'
+            }`}
+          >
+            {androidToast.type === 'connected' ? (
+              <CheckCircle2 className="w-5 h-5" />
+            ) : (
+              <Wifi className="w-5 h-5" />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-black tracking-wide uppercase">
+              {androidToast.title}
+            </div>
+            <p className="text-[11px] opacity-90 mt-0.5 leading-snug">
+              {androidToast.subtitle}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAndroidToast(null)}
+            className="p-1 rounded hover:bg-white/10 text-white/70 hover:text-white shrink-0"
+            title="Dismiss notification"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       )}
 
       {showQuickSlideModal && (

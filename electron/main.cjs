@@ -1,7 +1,8 @@
-const { app, BrowserWindow, screen, ipcMain } = require('electron');
+const { app, BrowserWindow, screen, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const http = require('http');
 const https = require('https');
+const dgram = require('dgram');
 const os = require('os');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -52,13 +53,50 @@ function saveRoutingConfigToDisk() {
 
 let latestBroadcastPayload = null;
 let pendingRemoteCommands = [];
-const connectedLanDevices = new Map();
+const connectedRemoteDevices = new Map(); // key -> { key, ip, device, connectedAt, lastSeen }
 const LAN_SERVER_PORT = 5174;
+const LAN_DISCOVERY_UDP_PORT = 41234;
 
 const isDev = !app.isPackaged;
 const APP_URL = isDev
   ? 'http://localhost:5173'
   : `file://${path.join(__dirname, '../dist/index.html')}`;
+
+function normalizeClientIp(rawAddr) {
+  if (!rawAddr) return 'unknown';
+  return String(rawAddr).replace(/^::ffff:/i, '');
+}
+
+function isLocalhostIp(ip) {
+  return ip === '127.0.0.1' || ip === '::1' || ip === 'localhost';
+}
+
+function emitAndroidConnectionEvent(eventPayload) {
+  if (operatorWindow && !operatorWindow.isDestroyed()) {
+    operatorWindow.webContents.send('freeworship:android-connection-event', eventPayload);
+  }
+}
+
+function pruneStaleRemoteDevices() {
+  const now = Date.now();
+  let removedAny = false;
+  for (const [key, entry] of connectedRemoteDevices.entries()) {
+    if (now - entry.lastSeen > 12000) {
+      connectedRemoteDevices.delete(key);
+      removedAny = true;
+      emitAndroidConnectionEvent({
+        type: 'disconnected',
+        ip: entry.ip,
+        device: entry.device,
+        connectedCount: connectedRemoteDevices.size,
+        timestamp: now,
+      });
+    }
+  }
+  if (removedAny) {
+    notifyWindowStatus();
+  }
+}
 
 function getLocalLanIps() {
   const nets = os.networkInterfaces();
@@ -73,6 +111,68 @@ function getLocalLanIps() {
   return ips.length > 0 ? ips : ['127.0.0.1'];
 }
 
+function trackRemoteClientRequest(req) {
+  pruneStaleRemoteDevices();
+  const url = req.url || '';
+  if (url.includes('role=operator')) return;
+
+  const cleanIp = normalizeClientIp(req.socket?.remoteAddress);
+  const isClientQuery = url.includes('role=client') || url.includes('device=');
+  const isRemoteCommand = req.method === 'POST' && !isLocalhostIp(cleanIp);
+
+  // Ignore internal localhost broadcast posts from PC operator console itself
+  if (!isClientQuery && !isRemoteCommand) {
+    return;
+  }
+
+  let deviceName = 'Android 3rd Monitor';
+  try {
+    const parsedUrl = new URL(url, 'http://localhost');
+    const d = parsedUrl.searchParams.get('device');
+    if (d) deviceName = d;
+  } catch {}
+
+  const key = `${cleanIp}|${deviceName}`;
+  const isNew = !connectedRemoteDevices.has(key);
+  const now = Date.now();
+  connectedRemoteDevices.set(key, {
+    key,
+    ip: cleanIp,
+    device: deviceName,
+    connectedAt: isNew ? now : connectedRemoteDevices.get(key).connectedAt,
+    lastSeen: now,
+  });
+
+  if (isNew) {
+    emitAndroidConnectionEvent({
+      type: 'connected',
+      ip: cleanIp,
+      device: deviceName,
+      connectedCount: connectedRemoteDevices.size,
+      timestamp: now,
+    });
+    notifyWindowStatus();
+  }
+}
+
+function resolveBundledApkPath() {
+  const candidates = [
+    path.join(process.resourcesPath || '', 'FreeWorship-StageController.apk'),
+    path.join(__dirname, '../dist/FreeWorship-StageController.apk'),
+    path.join(__dirname, '../public/FreeWorship-StageController.apk'),
+    path.join(app.getAppPath(), 'dist/FreeWorship-StageController.apk'),
+    path.join(app.getAppPath(), 'public/FreeWorship-StageController.apk'),
+    path.join(process.resourcesPath || '', 'app/dist/FreeWorship-StageController.apk'),
+    path.join(process.resourcesPath || '', 'dist/FreeWorship-StageController.apk'),
+  ];
+  for (const p of candidates) {
+    try {
+      if (p && fs.existsSync(p)) return p;
+    } catch {}
+  }
+  return null;
+}
+
 function handleLanHttpRequest(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -85,11 +185,29 @@ function handleLanHttpRequest(req, res) {
     return;
   }
 
-  const clientIp = req.socket.remoteAddress || 'unknown';
-  connectedLanDevices.set(clientIp, Date.now());
-  const now = Date.now();
-  for (const [ip, seen] of connectedLanDevices.entries()) {
-    if (now - seen > 15000) connectedLanDevices.delete(ip);
+  trackRemoteClientRequest(req);
+
+  // Serve Android APK directly over local Wi-Fi so Android devices can download via browser
+  if (req.url && req.url.split('?')[0] === '/FreeWorship-StageController.apk' && req.method === 'GET') {
+    const apkPath = resolveBundledApkPath();
+    if (!apkPath) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: 'Android APK file not found on PC host' }));
+      return;
+    }
+    try {
+      const stat = fs.statSync(apkPath);
+      res.writeHead(200, {
+        'Content-Type': 'application/vnd.android.package-archive',
+        'Content-Length': stat.size,
+        'Content-Disposition': 'attachment; filename="FreeWorship-StageController.apk"',
+      });
+      fs.createReadStream(apkPath).pipe(res);
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: err.message }));
+    }
+    return;
   }
 
   // Quick health / ping probe (allows Android & browsers to test reachability easily)
@@ -102,7 +220,8 @@ function handleLanHttpRequest(req, res) {
         status: 'online',
         ips: getLocalLanIps(),
         port: LAN_SERVER_PORT,
-        connectedDevices: connectedLanDevices.size,
+        connectedClients: connectedRemoteDevices.size,
+        connectedDevices: connectedRemoteDevices.size,
       })
     );
     return;
@@ -117,7 +236,9 @@ function handleLanHttpRequest(req, res) {
         service: 'FreeWorship Desktop LAN Server',
         ips: getLocalLanIps(),
         port: LAN_SERVER_PORT,
-        connectedDevices: connectedLanDevices.size,
+        connectedClients: connectedRemoteDevices.size,
+        connectedDevices: connectedRemoteDevices.size,
+        devices: Array.from(connectedRemoteDevices.values()),
       })
     );
     return;
@@ -139,7 +260,8 @@ function handleLanHttpRequest(req, res) {
         commands,
         ips: getLocalLanIps(),
         port: LAN_SERVER_PORT,
-        connectedDevices: connectedLanDevices.size,
+        connectedClients: connectedRemoteDevices.size,
+        connectedDevices: connectedRemoteDevices.size,
       })
     );
     return;
@@ -194,6 +316,40 @@ function startBuiltInLanServer() {
     // Port 5173 may already be used by Vite dev server, which is completely expected
   });
   server5173.listen(5173, '0.0.0.0');
+
+  // Periodic pruning of disconnected remote clients
+  setInterval(pruneStaleRemoteDevices, 4000);
+
+  // Instant UDP Broadcast Discovery Responder (allows Android "Scan PC" to find host in <50ms)
+  try {
+    const udpSocket = dgram.createSocket('udp4');
+    udpSocket.on('error', (err) => {
+      console.warn('[FreeWorship UDP Discovery] Warning:', err.message);
+    });
+    udpSocket.on('message', (msg, rinfo) => {
+      const text = msg.toString('utf8').trim();
+      if (text.includes('FREEWORSHIP_DISCOVER')) {
+        const replyPayload = Buffer.from(
+          JSON.stringify({
+            ok: true,
+            app: 'FreeWorship',
+            hostname: os.hostname(),
+            ips: getLocalLanIps(),
+            port: LAN_SERVER_PORT,
+          }),
+          'utf8'
+        );
+        udpSocket.send(replyPayload, 0, replyPayload.length, rinfo.port, rinfo.address, () => {});
+      }
+    });
+    udpSocket.bind(LAN_DISCOVERY_UDP_PORT, '0.0.0.0', () => {
+      try {
+        udpSocket.setBroadcast(true);
+      } catch {}
+    });
+  } catch (err) {
+    console.warn('[FreeWorship UDP Discovery] Init warning:', err.message);
+  }
 }
 
 function getDisplayList() {
@@ -281,6 +437,7 @@ function createOperatorWindow() {
     title: 'FreeWorship Studio — Operator Control (Windows)',
     backgroundColor: '#07090e',
     autoHideMenuBar: true,
+    icon: path.join(__dirname, '../public/icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -481,6 +638,7 @@ function closeOutputWindow(mode) {
 }
 
 function getWindowStatus() {
+  pruneStaleRemoteDevices();
   const displays = getDisplayList();
   return {
     projectorOpen: Boolean(projectorWindow && !projectorWindow.isDestroyed()),
@@ -491,7 +649,8 @@ function getWindowStatus() {
     routingConfig,
     lanIps: getLocalLanIps(),
     lanPort: LAN_SERVER_PORT,
-    connectedAndroidDevices: connectedLanDevices.size,
+    connectedAndroidDevices: connectedRemoteDevices.size,
+    connectedDevicesList: Array.from(connectedRemoteDevices.values()),
   };
 }
 
@@ -715,19 +874,150 @@ app.whenReady().then(() => {
     return null;
   });
 
-  // Windows Firewall Inbound Rule Helper (Allows LAN Remote on Ports 5174 & 5173)
+  // Check if Windows Firewall already allows FreeWorship LAN TCP (5174/5173) & UDP (41234)
+  ipcMain.handle('freeworship:check-firewall-rule', async () => {
+    const checkRule = (ruleName) =>
+      new Promise((resolve) => {
+        let out = '';
+        const child = spawn(
+          'netsh',
+          ['advfirewall', 'firewall', 'show', 'rule', `name=${ruleName}`],
+          { windowsHide: true }
+        );
+        child.stdout.on('data', (d) => {
+          out += d.toString();
+        });
+        child.on('close', (code) => {
+          const isEnabled = /Enabled:\s*Yes/i.test(out);
+          const isAllow = /Action:\s*Allow/i.test(out);
+          resolve(code === 0 && isEnabled && isAllow);
+        });
+        child.on('error', () => resolve(false));
+      });
+
+    try {
+      const [tcpAllowed, udpAllowed] = await Promise.all([
+        checkRule('FreeWorship LAN Remote (5174)'),
+        checkRule('FreeWorship LAN Discovery (UDP 41234)'),
+      ]);
+      return {
+        ok: true,
+        allowed: tcpAllowed && udpAllowed,
+        tcpAllowed,
+        udpAllowed,
+      };
+    } catch (err) {
+      return { ok: false, allowed: false, error: err.message };
+    }
+  });
+
+  // Windows Firewall Inbound Rule Helper (Allows TCP 5174/5173 & UDP 41234 with UAC elevation fallback)
   ipcMain.handle('freeworship:setup-firewall-rule', async () => {
-    return new Promise((resolve) => {
-      const cmd =
-        'netsh advfirewall firewall add rule name="FreeWorship LAN Remote (5174)" dir=in action=allow protocol=TCP localport=5174,5173';
-      const child = spawn('cmd.exe', ['/c', cmd]);
-      child.on('close', (code) => {
-        resolve({ ok: code === 0, code });
+    const tmpBat = path.join(os.tmpdir(), `freeworship-fw-${Date.now()}.cmd`);
+    const batLines = [
+      '@echo off',
+      'netsh advfirewall firewall delete rule name="FreeWorship LAN Remote (5174)" >nul 2>&1',
+      'netsh advfirewall firewall delete rule name="FreeWorship LAN Discovery (UDP 41234)" >nul 2>&1',
+      'netsh advfirewall firewall add rule name="FreeWorship LAN Remote (5174)" dir=in action=allow protocol=TCP localport=5174,5173 profile=any >nul 2>&1',
+      'if errorlevel 1 exit /b 1',
+      'netsh advfirewall firewall add rule name="FreeWorship LAN Discovery (UDP 41234)" dir=in action=allow protocol=UDP localport=41234 profile=any >nul 2>&1',
+      'if errorlevel 1 exit /b 1',
+      'exit /b 0',
+    ];
+
+    try {
+      await fs.promises.writeFile(tmpBat, batLines.join('\r\n'), 'utf8');
+
+      const directResult = await new Promise((resolve) => {
+        const child = spawn('cmd.exe', ['/c', `"${tmpBat}"`], { windowsHide: true });
+        child.on('close', (code) => resolve({ ok: code === 0, code }));
+        child.on('error', (err) => resolve({ ok: false, error: err.message }));
       });
-      child.on('error', (err) => {
-        resolve({ ok: false, error: err.message });
+
+      if (directResult.ok) {
+        return {
+          ok: true,
+          message: 'Windows Firewall rules added for TCP 5174/5173 and UDP discovery 41234!',
+        };
+      }
+
+      // Standard desktop user session requires Windows UAC elevation prompt
+      const escapedBat = tmpBat.replace(/'/g, "''");
+      const psScript = `try { $p = Start-Process -FilePath '${escapedBat}' -Verb RunAs -WindowStyle Hidden -Wait -PassThru; exit $p.ExitCode } catch { Write-Error $_.Exception.Message; exit 99 }`;
+
+      const elevatedResult = await new Promise((resolve) => {
+        let stderr = '';
+        const child = spawn(
+          'powershell.exe',
+          ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psScript],
+          { windowsHide: true }
+        );
+        child.stderr.on('data', (chunk) => {
+          stderr += chunk.toString();
+        });
+        child.on('close', (code) => {
+          if (code === 0) {
+            resolve({
+              ok: true,
+              message:
+                'Windows Firewall rules added successfully for TCP 5174/5173 and UDP discovery 41234!',
+            });
+          } else if (code === 99 || /cancel/i.test(stderr)) {
+            resolve({
+              ok: false,
+              code,
+              error:
+                'Administrator permission (UAC) was declined. Click "Allow Port in Windows Firewall" again and click Yes to allow ports 5174/5173 and UDP 41234.',
+            });
+          } else {
+            resolve({
+              ok: false,
+              code,
+              error:
+                stderr.trim() ||
+                'Could not modify Windows Firewall automatically. Please allow TCP 5174, 5173 and UDP 41234 in Windows Defender Firewall.',
+            });
+          }
+        });
+        child.on('error', (err) => {
+          resolve({ ok: false, error: err.message });
+        });
       });
-    });
+
+      return elevatedResult;
+    } catch (err) {
+      return { ok: false, error: err.message };
+    } finally {
+      try {
+        await fs.promises.unlink(tmpBat);
+      } catch {}
+    }
+  });
+
+  // Save / Export bundled Android APK to user's Downloads or chosen folder
+  ipcMain.handle('freeworship:save-android-apk', async () => {
+    try {
+      const apkPath = resolveBundledApkPath();
+      if (!apkPath) {
+        return { ok: false, error: 'Bundled Android APK file not found.' };
+      }
+      const defaultPath = path.join(app.getPath('downloads'), 'FreeWorship-StageController.apk');
+      const { canceled, filePath } = await dialog.showSaveDialog(operatorWindow || undefined, {
+        title: 'Save FreeWorship Android 3rd Monitor APK',
+        defaultPath,
+        filters: [{ name: 'Android Package (*.apk)', extensions: ['apk'] }],
+      });
+      if (canceled || !filePath) {
+        return { ok: false, canceled: true };
+      }
+      await fs.promises.copyFile(apkPath, filePath);
+      try {
+        shell.showItemInFolder(filePath);
+      } catch {}
+      return { ok: true, path: filePath };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
   });
 
   screen.on('display-added', notifyWindowStatus);
