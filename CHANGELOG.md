@@ -4,6 +4,24 @@ All notable changes to the **FreeWorship Studio** (Windows Desktop Presentation 
 
 ---
 
+## [1.1.9] — November 26, 2026
+
+### 🌐 Apple iPhone / iPad Safari & Browser Web Remote + LAN Web Server
+- **Built-in Local Network Web Server**: FreeWorship Studio now serves the live Stage Confidence Monitor & Remote Controller directly over ports `5174` / `5173` (`/remote`, `/apple`, `/ios`, `/?view=android`, plus static assets and `/bibles/*`) without breaking Android **Scan PC** health checks or `.apk` downloads.
+- **Dual QR Code Hub (`Mobile / QR`)**: Kept the **Android APK Installer** QR code and added a side-by-side **Apple / Web Remote QR code** with click-to-enlarge lightbox, iOS Home Screen Web App metadata (`viewport-fit=cover`, `apple-mobile-web-app-capable`), and `h-[100dvh]` Safari viewport sizing.
+- **Host & Browser Permissions Handled**: Added Chromium `Access-Control-Allow-Private-Network: true`, expanded Windows Firewall setup to unblock both TCP `5174/5173`, UDP `41234`, and `FreeWorship Studio.exe`, added a proactive Firewall prompt banner, plus **Permissions** checklist & **Keep Screen Awake** (`WakeLock`) in the browser remote.
+
+### 📊 Export as Microsoft PowerPoint (`.pptx`)
+- **Offline 16:9 OOXML PowerPoint Exporter** (`pptxExporter.ts`): Exports complete Service Schedules, active slide decks, individual songs, or entire songbooks as widescreen `.pptx` files with clean theme typography, slide headers, and captions.
+- Accessible from **File Menu**, **Service Schedule panel** (`Export .PPTX`), **Song Library cards** (`.PPTX`), and **Import / Export Hub**.
+
+### 📖 Unified Continuous 66-Book Bible Lookup (PC, Android & Apple/Web Remote)
+- **Single Text Bar with OT-then-NT Autocomplete**: Replaced Book and Chapter `<select>` dropdowns with one smart lookup bar (`suggestBibleBooks`), ordering matches Old Testament first then New Testament (e.g., `"e"` -> `Exodus`, `Ezra`, `Esther`, `Ecclesiastes`, `Ezekiel`, `Ephesians`) and narrowing live as you type.
+- **Jump & Highlight Without Hiding Context**: Typing references like `John 3:16` jumps directly to the verse and highlights it while keeping preceding and proceeding verses visible above and below.
+- **Seamless Virtualized 66-Book Scroll List**: Continuous variable-height scroll from Genesis 1:1 through Revelation 22:21 without stopping at book or chapter walls, plus touchscreen **Select Range** mode on mobile remotes.
+
+---
+
 ## [1.1.8] — November 25, 2026
 
 ### 🎓 Interactive On-Interface Tour with Natural Neural Voice-Over

@@ -18,15 +18,15 @@ import {
   AlertCircle,
 } from 'lucide-react';
 
-export const APP_VERSION = '1.1.8';
-export const APP_RELEASE_DATE = 'November 10, 2026';
+export const APP_VERSION = '1.1.9';
+export const APP_RELEASE_DATE = 'November 26, 2026';
 export const GITHUB_UPDATE_REPO = 'https://github.com/mielglitx/FreeWorshipUpdate';
 export const GITHUB_RELEASES_API =
   'https://api.github.com/repos/mielglitx/FreeWorshipUpdate/releases/latest';
 export const GITHUB_RAW_UPDATES_URL =
   'https://raw.githubusercontent.com/mielglitx/FreeWorshipUpdate/main/updates.json';
 export const GITHUB_RAW_APK_URL =
-  'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.8/FreeWorship-StageController.apk';
+  'https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.9/FreeWorship-StageController.apk';
 
 /**
  * Semver comparison: returns true ONLY if remoteVersion is strictly greater than currentVersion.
@@ -58,6 +58,18 @@ export interface ChangelogItem {
 }
 
 export const APP_CHANGELOG: ChangelogItem[] = [
+  {
+    version: '1.1.9',
+    date: 'November 26, 2026',
+    platform: 'Windows Desktop, Android & Apple Browser',
+    title: 'Apple / Browser Web Remote, PowerPoint (.pptx) Export & Continuous 66-Book Bible Lookup',
+    highlights: [
+      'Apple iPhone / iPad & Web Browser Remote QR + LAN Web Server: FreeWorship Studio now hosts its controller & 3rd Stage Monitor over local Wi-Fi (http://<PC-IP>:5174/remote) with a dedicated Apple / Web QR code alongside the Android APK QR code.',
+      'Browser & Host Permissions Ready: Includes proactive Windows Firewall executable + port UAC prompt, Private Network Access headers, iOS Local Network guidance, and Screen Wake Lock ("Keep Screen Awake").',
+      'Export as PowerPoint (.pptx): Export complete Service Schedules, active decks, individual songs, or songbooks to 16:9 Microsoft PowerPoint (.pptx) presentations from the File menu, Schedule panel, Song cards, and Import/Export Hub.',
+      'Unified Continuous 66-Book Bible Lookup (PC & Mobile): Replaced Book/Chapter dropdowns with a single autocomplete bar showing OT-then-NT book suggestions, jump-and-highlight navigation keeping surrounding verses visible, and continuous scrolling from Genesis to Revelation.',
+    ],
+  },
   {
     version: '1.1.8',
     date: 'November 10, 2026',

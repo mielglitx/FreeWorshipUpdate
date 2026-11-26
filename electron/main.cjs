@@ -173,10 +173,175 @@ function resolveBundledApkPath() {
   return null;
 }
 
+const WEB_MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.wasm': 'application/wasm',
+};
+
+function resolveWebDistDir() {
+  const candidates = [
+    path.join(app.getAppPath(), 'dist'),
+    path.join(__dirname, '../dist'),
+    path.join(process.resourcesPath || '', 'app.asar', 'dist'),
+    path.join(process.resourcesPath || '', 'app', 'dist'),
+    path.join(process.resourcesPath || '', 'dist'),
+  ];
+  for (const dir of candidates) {
+    try {
+      if (dir && fs.existsSync(path.join(dir, 'index.html'))) {
+        return path.resolve(dir);
+      }
+    } catch {}
+  }
+  return null;
+}
+
+function serveStaticWebFile(res, filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  const contentType = WEB_MIME_TYPES[ext] || 'application/octet-stream';
+  fs.readFile(filePath, (err, data) => {
+    if (err) {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Not found');
+      return;
+    }
+    const cacheControl =
+      ext === '.html' ? 'no-cache, no-store, must-revalidate' : 'public, max-age=3600';
+    res.writeHead(200, {
+      'Content-Type': contentType,
+      'Content-Length': data.length,
+      'Cache-Control': cacheControl,
+    });
+    res.end(data);
+  });
+}
+
+function proxyRequestToViteDev(req, res, fallbackFn) {
+  const proxyReq = http.request(
+    {
+      hostname: '127.0.0.1',
+      port: 5173,
+      path: req.url || '/',
+      method: req.method || 'GET',
+      headers: {
+        ...req.headers,
+        host: '127.0.0.1:5173',
+      },
+      timeout: 2500,
+    },
+    (proxyRes) => {
+      const headers = { ...proxyRes.headers };
+      delete headers['access-control-allow-origin'];
+      res.writeHead(proxyRes.statusCode || 200, {
+        ...headers,
+        'Access-Control-Allow-Origin': '*',
+      });
+      proxyRes.pipe(res);
+    }
+  );
+  proxyReq.on('error', () => fallbackFn());
+  proxyReq.on('timeout', () => {
+    proxyReq.destroy();
+    fallbackFn();
+  });
+  proxyReq.end();
+}
+
+function handleLanWebRoute(req, res, rawUrl, urlPath) {
+  const cleanLower = urlPath.toLowerCase().replace(/\/+$/, '') || '/';
+
+  // Friendly browser entry routes for Apple Safari & mobile browsers
+  if (
+    cleanLower === '/remote' ||
+    cleanLower === '/apple' ||
+    cleanLower === '/ios' ||
+    cleanLower === '/controller' ||
+    cleanLower === '/stage'
+  ) {
+    res.writeHead(302, { Location: '/?view=android', 'Cache-Control': 'no-cache' });
+    res.end();
+    return true;
+  }
+
+  // Browser navigation to root (without JSON/probe intent) opens the mobile remote UI
+  const acceptHeader = String(req.headers?.accept || '').toLowerCase();
+  if (
+    cleanLower === '/' &&
+    !rawUrl.includes('view=') &&
+    acceptHeader.includes('text/html') &&
+    !acceptHeader.includes('application/json')
+  ) {
+    res.writeHead(302, { Location: '/?view=android', 'Cache-Control': 'no-cache' });
+    res.end();
+    return true;
+  }
+
+  const isHtmlRequest = cleanLower === '/' && rawUrl.includes('view=');
+  const serveFromDist = () => {
+    const distDir = resolveWebDistDir();
+    if (!distDir) {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('FreeWorship Web Remote bundle not found.');
+      return;
+    }
+    const relPath =
+      cleanLower === '/' || cleanLower === '/index.html'
+        ? 'index.html'
+        : urlPath.replace(/^\/+/, '');
+    const resolvedTarget = path.resolve(distDir, relPath);
+    if (
+      resolvedTarget !== distDir &&
+      !resolvedTarget.startsWith(distDir + path.sep)
+    ) {
+      res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Forbidden');
+      return;
+    }
+    try {
+      if (fs.existsSync(resolvedTarget) && fs.statSync(resolvedTarget).isFile()) {
+        serveStaticWebFile(res, resolvedTarget);
+        return;
+      }
+      // SPA fallback for HTML view requests
+      if (isHtmlRequest || !path.extname(relPath)) {
+        serveStaticWebFile(res, path.join(distDir, 'index.html'));
+        return;
+      }
+    } catch {}
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Not found');
+  };
+
+  if (isDev && req.method === 'GET') {
+    proxyRequestToViteDev(req, res, serveFromDist);
+    return true;
+  }
+
+  serveFromDist();
+  return true;
+}
+
 function handleLanHttpRequest(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', '*');
+  res.setHeader('Access-Control-Allow-Private-Network', 'true');
   res.setHeader('Access-Control-Max-Age', '86400');
 
   if (req.method === 'OPTIONS') {
@@ -187,8 +352,16 @@ function handleLanHttpRequest(req, res) {
 
   trackRemoteClientRequest(req);
 
+  const rawUrl = req.url || '/';
+  let urlPath = '/';
+  try {
+    urlPath = decodeURIComponent(rawUrl.split('?')[0] || '/');
+  } catch {
+    urlPath = rawUrl.split('?')[0] || '/';
+  }
+
   // Serve Android APK directly over local Wi-Fi so Android devices can download via browser
-  if (req.url && req.url.split('?')[0] === '/FreeWorship-StageController.apk' && req.method === 'GET') {
+  if (urlPath === '/FreeWorship-StageController.apk' && req.method === 'GET') {
     const apkPath = resolveBundledApkPath();
     if (!apkPath) {
       res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -210,8 +383,14 @@ function handleLanHttpRequest(req, res) {
     return;
   }
 
-  // Quick health / ping probe (allows Android & browsers to test reachability easily)
-  if (!req.url || req.url === '/' || req.url === '/ping' || req.url === '/health') {
+  // Quick health / ping probe (keep JSON for Android Scan PC unless browser navigation or ?view= query)
+  const acceptHeader = String(req.headers?.accept || '').toLowerCase();
+  const isBrowserRootNavigation =
+    urlPath === '/' &&
+    (rawUrl.includes('view=') ||
+      (acceptHeader.includes('text/html') && !acceptHeader.includes('application/json')));
+
+  if (!isBrowserRootNavigation && (urlPath === '/' || urlPath === '/ping' || urlPath === '/health')) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(
       JSON.stringify({
@@ -227,7 +406,7 @@ function handleLanHttpRequest(req, res) {
     return;
   }
 
-  if (req.url && req.url.startsWith('/api/lan-info') && req.method === 'GET') {
+  if (urlPath.startsWith('/api/lan-info') && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(
       JSON.stringify({
@@ -244,8 +423,8 @@ function handleLanHttpRequest(req, res) {
     return;
   }
 
-  if (req.url && req.url.startsWith('/api/lan-sync') && req.method === 'GET') {
-    const isOperator = req.url.includes('role=operator');
+  if (urlPath.startsWith('/api/lan-sync') && req.method === 'GET') {
+    const isOperator = rawUrl.includes('role=operator');
     const commands = isOperator ? [...pendingRemoteCommands] : [];
     if (isOperator && pendingRemoteCommands.length > 0) {
       pendingRemoteCommands = [];
@@ -267,7 +446,7 @@ function handleLanHttpRequest(req, res) {
     return;
   }
 
-  if (req.url && req.url.startsWith('/api/lan-sync') && req.method === 'POST') {
+  if (urlPath.startsWith('/api/lan-sync') && req.method === 'POST') {
     let body = '';
     req.on('data', (chunk) => {
       body += chunk;
@@ -295,6 +474,12 @@ function handleLanHttpRequest(req, res) {
         res.end(JSON.stringify({ ok: false }));
       }
     });
+    return;
+  }
+
+  // Serve Web Browser Remote UI (iPhone/iPad/Mac Safari & desktop browsers) and static dist assets
+  if (req.method === 'GET') {
+    handleLanWebRoute(req, res, rawUrl, urlPath);
     return;
   }
 
@@ -896,32 +1081,42 @@ app.whenReady().then(() => {
       });
 
     try {
-      const [tcpAllowed, udpAllowed] = await Promise.all([
+      const [tcpAllowed, udpAllowed, appAllowed] = await Promise.all([
         checkRule('FreeWorship LAN Remote (5174)'),
         checkRule('FreeWorship LAN Discovery (UDP 41234)'),
+        checkRule('FreeWorship Studio LAN App'),
       ]);
       return {
         ok: true,
-        allowed: tcpAllowed && udpAllowed,
+        allowed: tcpAllowed && udpAllowed && appAllowed,
         tcpAllowed,
         udpAllowed,
+        appAllowed,
       };
     } catch (err) {
       return { ok: false, allowed: false, error: err.message };
     }
   });
 
-  // Windows Firewall Inbound Rule Helper (Allows TCP 5174/5173 & UDP 41234 with UAC elevation fallback)
+  // Windows Firewall Inbound Rule Helper (Allows TCP 5174/5173, UDP 41234 & Host App with UAC elevation fallback)
   ipcMain.handle('freeworship:setup-firewall-rule', async () => {
     const tmpBat = path.join(os.tmpdir(), `freeworship-fw-${Date.now()}.cmd`);
+    const safeExecPath = String(process.execPath || '').replace(/"/g, '');
     const batLines = [
       '@echo off',
       'netsh advfirewall firewall delete rule name="FreeWorship LAN Remote (5174)" >nul 2>&1',
       'netsh advfirewall firewall delete rule name="FreeWorship LAN Discovery (UDP 41234)" >nul 2>&1',
+      'netsh advfirewall firewall delete rule name="FreeWorship Studio LAN App" >nul 2>&1',
       'netsh advfirewall firewall add rule name="FreeWorship LAN Remote (5174)" dir=in action=allow protocol=TCP localport=5174,5173 profile=any >nul 2>&1',
       'if errorlevel 1 exit /b 1',
       'netsh advfirewall firewall add rule name="FreeWorship LAN Discovery (UDP 41234)" dir=in action=allow protocol=UDP localport=41234 profile=any >nul 2>&1',
       'if errorlevel 1 exit /b 1',
+      ...(safeExecPath
+        ? [
+            `netsh advfirewall firewall add rule name="FreeWorship Studio LAN App" dir=in action=allow program="${safeExecPath}" enable=yes profile=any >nul 2>&1`,
+            'if errorlevel 1 exit /b 1',
+          ]
+        : []),
       'exit /b 0',
     ];
 

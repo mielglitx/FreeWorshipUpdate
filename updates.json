@@ -1,27 +1,39 @@
 {
-  "version": "1.1.8",
-  "releaseDate": "November 25, 2026",
+  "version": "1.1.9",
+  "releaseDate": "November 26, 2026",
   "author": "Amiel Yalung",
   "repository": "https://github.com/mielglitx/FreeWorshipUpdate",
   "windows": {
-    "version": "1.1.8",
-    "releaseDate": "November 25, 2026",
+    "version": "1.1.9",
+    "releaseDate": "November 26, 2026",
     "appName": "FreeWorship Studio (Windows)",
-    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.8/FreeWorship-Studio-Setup-1.1.8.exe",
+    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.9/FreeWorship-Studio-Setup-1.1.9.exe",
     "portableUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases",
-    "fileName": "FreeWorship Studio-Setup-1.1.8.exe",
-    "notes": "v1.1.8 update: VS Code Studio Titlebar, official FreeWorship logo branding, top-bar Android APK & offline QR installer, UAC firewall helper with live status badge, UDP + native Wi-Fi PC discovery, 2nd monitor titles, and live on-interface guided tour with natural voice-over."
+    "fileName": "FreeWorship Studio-Setup-1.1.9.exe",
+    "notes": "v1.1.9 update: Apple / Browser Web Remote QR + built-in LAN web server, browser/firewall permissions & Keep Screen Awake, Export as PowerPoint (.pptx), and unified continuous 66-book Bible lookup across PC & mobile."
   },
   "android": {
-    "version": "1.1.8",
-    "releaseDate": "November 25, 2026",
+    "version": "1.1.9",
+    "releaseDate": "November 26, 2026",
     "appName": "FreeWorship Android Remote & 3rd Monitor",
-    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.8/FreeWorship-StageController.apk",
+    "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.9/FreeWorship-StageController.apk",
     "fallbackDownloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/raw/main/FreeWorship-StageController.apk",
     "fileName": "FreeWorship-StageController.apk",
-    "notes": "v1.1.8 update: Official logo branding, native multi-threaded UDP + subnet PC discovery, simultaneous connection toast notifications, remote Bible loading, custom song creation, and ON AIR slide highlighting fix."
+    "notes": "v1.1.9 update: Continuous 66-book Bible lookup with OT-then-NT autocomplete & jump-highlight, unified Add Song / Bible controls, and dynamic client device sync."
   },
   "changelog": [
+    {
+      "version": "1.1.9",
+      "date": "November 26, 2026",
+      "platform": "Windows Desktop, Android & Apple Browser",
+      "title": "Apple / Browser Web Remote, PowerPoint (.pptx) Export & Continuous 66-Book Bible Lookup",
+      "highlights": [
+        "Apple / Web Browser Remote QR + Built-in LAN Web Server: iPhone, iPad, Mac Safari, and any browser can scan the dedicated Apple / Web QR code to control FreeWorship and view the 3rd Monitor over Wi-Fi while preserving Android APK QR downloads.",
+        "Host & Browser Permissions Ready: Proactive Windows Firewall port + app rule check, Chromium Private Network Access headers, iOS Local Network permission checklist, and Keep Screen Awake (Wake Lock).",
+        "Export as PowerPoint (.pptx): Export schedules, active decks, songs, or songbooks to 16:9 .pptx files from the File menu, Schedule header, Song cards, and Import/Export Hub.",
+        "Continuous 66-Book Bible Lookup (PC & Mobile): Single text lookup bar with OT-then-NT book autocomplete suggestions, jump-and-highlight navigation keeping surrounding verses visible, and continuous scroll from Genesis to Revelation."
+      ]
+    },
     {
       "version": "1.1.8",
       "date": "November 25, 2026",

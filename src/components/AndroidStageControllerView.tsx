@@ -18,14 +18,16 @@ import {
   RefreshCw,
   Search,
   Send,
+  ShieldCheck,
   Smartphone,
   Sparkles,
+  Sun,
   Trash2,
   Wifi,
   WifiOff,
   X,
 } from 'lucide-react';
-import { LiveBroadcastPayload, RemoteControlAction, Slide } from '../types/worship';
+import { BibleVerse, LiveBroadcastPayload, RemoteControlAction, Slide } from '../types/worship';
 import {
   fetchRemoteStateFromHost,
   liveSyncBus,
@@ -38,7 +40,12 @@ import {
   DEFAULT_SONGS,
   DEFAULT_THEMES,
 } from '../data/defaultData';
-import { BIBLE_BOOKS_66 } from '../services/bibleImporter';
+import {
+  loadBuiltInBible,
+  parseScriptureReference,
+  sortVersesCanonically,
+} from '../services/bibleImporter';
+import { ContinuousBibleBrowser } from './ContinuousBibleBrowser';
 import { WelcomeAboutModal } from './SystemModals';
 import { HowToUseModal } from './HowToUseModal';
 import {
@@ -48,6 +55,78 @@ import {
 } from './LiveInterfaceTourOverlay';
 
 const SAVED_HOST_KEY = 'freeworship_android_host_url_v1';
+
+interface RemoteRuntimeInfo {
+  isNativeAndroid: boolean;
+  isAppleDevice: boolean;
+  isBrowserMode: boolean;
+  deviceLabel: string;
+  headerTitle: string;
+  headerSubtitle: string;
+}
+
+function getRemoteRuntimeInfo(): RemoteRuntimeInfo {
+  if (typeof window === 'undefined') {
+    return {
+      isNativeAndroid: false,
+      isAppleDevice: false,
+      isBrowserMode: true,
+      deviceLabel: 'Web-Browser-Remote',
+      headerTitle: 'FreeWorship Remote',
+      headerSubtitle: 'Dedicated 3rd Monitor & Projector Controller',
+    };
+  }
+  const metaEnv = (import.meta as unknown as { env?: Record<string, string> }).env;
+  const isNativeAndroid = Boolean(
+    (window as any).Capacitor?.isNativePlatform?.() || metaEnv?.VITE_APP_TARGET === 'android'
+  );
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+  const isIos =
+    /iPhone|iPad|iPod/i.test(ua) ||
+    (/Macintosh/i.test(ua) && typeof document !== 'undefined' && 'ontouchend' in document);
+  const isMac = !isIos && /Macintosh/i.test(ua);
+  const isAppleDevice = !isNativeAndroid && (isIos || isMac);
+  const isBrowserMode = !isNativeAndroid;
+
+  if (isNativeAndroid) {
+    return {
+      isNativeAndroid: true,
+      isAppleDevice: false,
+      isBrowserMode: false,
+      deviceLabel: 'Android-3rdMonitor-APK',
+      headerTitle: 'FreeWorship Android',
+      headerSubtitle: 'Dedicated 3rd Monitor (Stage Confidence) & Projector Controller',
+    };
+  }
+  if (isIos) {
+    return {
+      isNativeAndroid: false,
+      isAppleDevice: true,
+      isBrowserMode: true,
+      deviceLabel: 'Apple-iOS-Browser',
+      headerTitle: 'FreeWorship Apple Remote',
+      headerSubtitle: 'iPhone / iPad Safari Web 3rd Monitor & Controller',
+    };
+  }
+  if (isMac) {
+    return {
+      isNativeAndroid: false,
+      isAppleDevice: true,
+      isBrowserMode: true,
+      deviceLabel: 'Apple-Mac-Browser',
+      headerTitle: 'FreeWorship Apple Remote',
+      headerSubtitle: 'macOS Browser Web 3rd Monitor & Controller',
+    };
+  }
+  return {
+    isNativeAndroid: false,
+    isAppleDevice: false,
+    isBrowserMode: true,
+    deviceLabel: 'Web-Browser-Remote',
+    headerTitle: 'FreeWorship Web Remote',
+    headerSubtitle: 'Browser 3rd Monitor & Projector Controller',
+  };
+}
 
 type AndroidLayoutMode = 'split' | 'stage-only' | 'controller-only';
 
@@ -100,15 +179,27 @@ async function detectLocalSubnetPrefix(): Promise<string[]> {
 }
 
 export const AndroidStageControllerView: React.FC = () => {
+  const runtimeInfo = getRemoteRuntimeInfo();
+
   const [hostInput, setHostInput] = useState<string>(() => {
+    // When served over LAN HTTP in a mobile/desktop browser (e.g. Apple QR scan),
+    // always prioritize the serving PC origin instead of stale localStorage IPs.
+    if (
+      runtimeInfo.isBrowserMode &&
+      typeof window !== 'undefined' &&
+      window.location.origin.startsWith('http') &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1'
+    ) {
+      return window.location.host;
+    }
     try {
       const saved = localStorage.getItem(SAVED_HOST_KEY);
       if (saved) return saved;
     } catch {}
     if (
       typeof window !== 'undefined' &&
-      window.location.origin.startsWith('http') &&
-      !window.location.hostname.includes('localhost')
+      window.location.origin.startsWith('http')
     ) {
       return window.location.host;
     }
@@ -116,14 +207,22 @@ export const AndroidStageControllerView: React.FC = () => {
   });
 
   const [activeHost, setActiveHost] = useState<string>(() => {
+    if (
+      runtimeInfo.isBrowserMode &&
+      typeof window !== 'undefined' &&
+      window.location.origin.startsWith('http') &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1'
+    ) {
+      return window.location.origin;
+    }
     try {
       const saved = localStorage.getItem(SAVED_HOST_KEY);
       if (saved) return saved;
     } catch {}
     if (
       typeof window !== 'undefined' &&
-      window.location.origin.startsWith('http') &&
-      !window.location.hostname.includes('localhost')
+      window.location.origin.startsWith('http')
     ) {
       return window.location.origin;
     }
@@ -153,11 +252,79 @@ export const AndroidStageControllerView: React.FC = () => {
   const [newSongKey, setNewSongKey] = useState<string>('G');
   const [newSongLyrics, setNewSongLyrics] = useState<string>('');
   const [remoteBibleTranslation, setRemoteBibleTranslation] = useState<string>('KJV');
-  const [remoteBibleBook, setRemoteBibleBook] = useState<string>('John');
-  const [remoteBibleChapter, setRemoteBibleChapter] = useState<number>(3);
-  const [remoteBibleVerseRange, setRemoteBibleVerseRange] = useState<string>('16');
-  const [remoteBibleQuickRef, setRemoteBibleQuickRef] = useState<string>('');
+  const [remoteBibleSearchQuery, setRemoteBibleSearchQuery] = useState<string>('');
+  const [remoteBibleCache, setRemoteBibleCache] = useState<Record<string, BibleVerse[]>>({});
+  const [remoteBibleLoading, setRemoteBibleLoading] = useState<boolean>(false);
+  const [remoteSelectedVerseKeys, setRemoteSelectedVerseKeys] = useState<string[]>([]);
+  const [remoteBibleAnchorIdx, setRemoteBibleAnchorIdx] = useState<number | null>(null);
   const [remoteActionNotice, setRemoteActionNotice] = useState<string>('');
+
+  // Lazy-load full 66-book built-in Bible for continuous browsing when Add Song / Bible tab is open
+  useEffect(() => {
+    if (controllerTab !== 'add-item') return;
+    if (remoteBibleCache[remoteBibleTranslation]?.length) return;
+    let active = true;
+    setRemoteBibleLoading(true);
+    loadBuiltInBible(remoteBibleTranslation)
+      .then((loaded) => {
+        if (!active) return;
+        if (loaded && loaded.length > 0) {
+          setRemoteBibleCache((prev) => ({
+            ...prev,
+            [remoteBibleTranslation]: sortVersesCanonically(loaded),
+          }));
+        }
+      })
+      .finally(() => {
+        if (active) setRemoteBibleLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [controllerTab, remoteBibleTranslation, remoteBibleCache]);
+
+  const remoteBibleVerses = remoteBibleCache[remoteBibleTranslation] || [];
+  const getRemoteVerseKey = (v: BibleVerse) =>
+    `${v.translation}-${v.book}-${v.chapter}-${v.verse}`;
+
+  const compileRemoteReference = (targetVerses: BibleVerse[]): string => {
+    if (targetVerses.length === 0) return '';
+    const first = targetVerses[0];
+    const last = targetVerses[targetVerses.length - 1];
+    if (
+      targetVerses.length > 1 &&
+      first.book === last.book &&
+      first.chapter === last.chapter
+    ) {
+      return `${first.book} ${first.chapter}:${first.verse}-${last.verse}`;
+    }
+    return `${first.book} ${first.chapter}:${first.verse}`;
+  };
+
+  const dispatchRemotePassages = (targetVerses: BibleVerse[], goLive: boolean) => {
+    let refStr = compileRemoteReference(targetVerses);
+    if (!refStr && remoteBibleSearchQuery.trim()) {
+      const parsed = parseScriptureReference(remoteBibleSearchQuery.trim());
+      if (parsed) {
+        refStr = remoteBibleSearchQuery.trim();
+      }
+    }
+    if (!refStr) return;
+    dispatchRemoteAction({
+      action: 'ADD_SCRIPTURE_TO_SCHEDULE',
+      reference: refStr,
+      translation: remoteBibleTranslation,
+      goLive,
+    });
+    triggerRemoteNotice(
+      goLive
+        ? `Projected ${refStr} (${remoteBibleTranslation}) Live!`
+        : `Added ${refStr} (${remoteBibleTranslation}) to Schedule`
+    );
+    if (goLive) {
+      setControllerTab('slides');
+    }
+  };
 
   const showSuccessConnectionToast = (hostLabel: string) => {
     const clean = hostLabel.replace(/^https?:\/\//, '');
@@ -187,6 +354,68 @@ export const AndroidStageControllerView: React.FC = () => {
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [showHowToUseModal, setShowHowToUseModal] = useState(false);
   const [showAndroidLiveTour, setShowAndroidLiveTour] = useState(false);
+  const [showBrowserPermissionsModal, setShowBrowserPermissionsModal] = useState(false);
+  const [wakeLockActive, setWakeLockActive] = useState(false);
+  const [wakeLockWanted, setWakeLockWanted] = useState<boolean>(runtimeInfo.isBrowserMode);
+  const wakeLockSentinelRef = useRef<any>(null);
+  const wakeLockSupported =
+    typeof navigator !== 'undefined' && 'wakeLock' in navigator;
+
+  const requestScreenWakeLock = async (silent = false) => {
+    try {
+      const nav = navigator as any;
+      if (!nav?.wakeLock?.request) return false;
+      if (wakeLockSentinelRef.current && !wakeLockSentinelRef.current.released) {
+        setWakeLockActive(true);
+        return true;
+      }
+      const sentinel = await nav.wakeLock.request('screen');
+      wakeLockSentinelRef.current = sentinel;
+      setWakeLockActive(true);
+      sentinel.addEventListener?.('release', () => {
+        setWakeLockActive(false);
+      });
+      return true;
+    } catch {
+      setWakeLockActive(false);
+      if (!silent) {
+        setConnectionNotice(
+          'Screen Awake permission could not start yet — tap "Keep Awake" after interacting with the page.'
+        );
+      }
+      return false;
+    }
+  };
+
+  useEffect(() => {
+    if (!runtimeInfo.isBrowserMode || !wakeLockWanted || !wakeLockSupported) return;
+    requestScreenWakeLock(true);
+    const handleVisibilityOrTap = () => {
+      if (document.visibilityState === 'visible' && wakeLockWanted) {
+        requestScreenWakeLock(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityOrTap);
+    window.addEventListener('pointerdown', handleVisibilityOrTap, { once: true });
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityOrTap);
+      window.removeEventListener('pointerdown', handleVisibilityOrTap);
+    };
+  }, [runtimeInfo.isBrowserMode, wakeLockWanted, wakeLockSupported]);
+
+  const handleToggleWakeLock = async () => {
+    if (wakeLockActive && wakeLockSentinelRef.current) {
+      setWakeLockWanted(false);
+      try {
+        await wakeLockSentinelRef.current.release();
+      } catch {}
+      wakeLockSentinelRef.current = null;
+      setWakeLockActive(false);
+      return;
+    }
+    setWakeLockWanted(true);
+    await requestScreenWakeLock(false);
+  };
 
   useEffect(() => {
     try {
@@ -272,13 +501,13 @@ export const AndroidStageControllerView: React.FC = () => {
     const poll = async () => {
       if (!activeHost) return;
       let resolvedHost = activeHost;
-      let remoteState = await fetchRemoteStateFromHost(activeHost, 'Android-3rdMonitor-APK', 1200);
+      let remoteState = await fetchRemoteStateFromHost(activeHost, runtimeInfo.deviceLabel, 1200);
       if (!remoteState) {
         const normalized = normalizeHostUrl(activeHost);
         const alt = normalized.includes(':5174')
           ? normalized.replace(':5174', ':5173')
           : normalized.replace(':5173', ':5174');
-        const altState = await fetchRemoteStateFromHost(alt, 'Android-3rdMonitor-APK', 1000);
+        const altState = await fetchRemoteStateFromHost(alt, runtimeInfo.deviceLabel, 1000);
         if (altState) {
           remoteState = altState;
           resolvedHost = alt;
@@ -327,7 +556,7 @@ export const AndroidStageControllerView: React.FC = () => {
       localStorage.setItem(SAVED_HOST_KEY, hostDisplay);
     } catch {}
 
-    const state = await fetchRemoteStateFromHost(norm, 'Android-3rdMonitor-APK', 1500);
+    const state = await fetchRemoteStateFromHost(norm, runtimeInfo.deviceLabel, 1500);
     if (state) {
       setPayload(state);
       lastSyncTimeRef.current = Date.now();
@@ -345,7 +574,7 @@ export const AndroidStageControllerView: React.FC = () => {
         : `${norm}:5174`;
       const altDisplay = altNorm.replace(/^https?:\/\//, '');
       setConnectionNotice(`Trying alternate port ${altDisplay}...`);
-      const altState = await fetchRemoteStateFromHost(altNorm, 'Android-3rdMonitor-APK', 1500);
+      const altState = await fetchRemoteStateFromHost(altNorm, runtimeInfo.deviceLabel, 1500);
       if (altState) {
         setPayload(altState);
         lastSyncTimeRef.current = Date.now();
@@ -363,7 +592,11 @@ export const AndroidStageControllerView: React.FC = () => {
       } else {
         wasConnectedRef.current = false;
         setIsConnected(false);
-        setConnectionNotice(`Could not reach PC at ${hostDisplay}. Check Wi-Fi & Firewall.`);
+        setConnectionNotice(
+          runtimeInfo.isBrowserMode
+            ? `Could not reach PC at ${hostDisplay}. Allow Local Network permission in Safari/Chrome & check PC Wi-Fi/Firewall.`
+            : `Could not reach PC at ${hostDisplay}. Check Wi-Fi & Firewall.`
+        );
         return false;
       }
     }
@@ -600,9 +833,9 @@ export const AndroidStageControllerView: React.FC = () => {
   return (
     <div
       data-ui-theme={uiColorTheme}
-      className="ui-console-shell h-screen w-screen bg-booth-950 text-slate-100 flex flex-col overflow-hidden select-none"
+      className="ui-console-shell h-[100dvh] w-screen bg-booth-950 text-slate-100 flex flex-col overflow-hidden select-none"
     >
-      {/* Top Android Status & Wi-Fi Sync Bar */}
+      {/* Top Remote Status & Wi-Fi Sync Bar */}
       <header className="bg-booth-900 border-b border-booth-800 px-3 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500 to-emerald-500 flex items-center justify-center shadow-md shadow-amber-500/20">
@@ -611,7 +844,7 @@ export const AndroidStageControllerView: React.FC = () => {
           <div>
             <div className="flex items-center gap-1.5">
               <span className="font-black text-xs tracking-wider uppercase text-white">
-                FreeWorship Android
+                {runtimeInfo.headerTitle}
               </span>
               <span
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
@@ -634,7 +867,7 @@ export const AndroidStageControllerView: React.FC = () => {
               </span>
             </div>
             <p className="text-[10px] text-slate-400">
-              Dedicated 3rd Monitor (Stage Confidence) & Projector Controller
+              {runtimeInfo.headerSubtitle}
             </p>
           </div>
         </div>
@@ -739,7 +972,43 @@ export const AndroidStageControllerView: React.FC = () => {
             </button>
           </div>
 
-          <div className="flex items-center gap-1.5 ml-auto">
+          <div className="flex items-center gap-1.5 ml-auto flex-wrap">
+            {runtimeInfo.isBrowserMode && wakeLockSupported && (
+              <button
+                type="button"
+                onClick={handleToggleWakeLock}
+                className={`flex items-center gap-1 px-2.5 py-1.5 border text-[10px] font-bold transition ${
+                  wakeLockActive
+                    ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                    : 'bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25'
+                }`}
+                title={
+                  wakeLockActive
+                    ? 'Screen Wake Lock active (display stays awake)'
+                    : 'Tap to grant Screen Wake Lock so your phone/iPad stays awake on stage'
+                }
+              >
+                <Sun className="w-3 h-3" />
+                <span>{wakeLockActive ? 'Screen Awake' : 'Keep Screen Awake'}</span>
+              </button>
+            )}
+
+            {runtimeInfo.isBrowserMode && (
+              <button
+                type="button"
+                onClick={() => setShowBrowserPermissionsModal(true)}
+                className={`flex items-center gap-1 px-2.5 py-1.5 border text-[10px] font-bold transition ${
+                  isConnected
+                    ? 'bg-sky-500/15 hover:bg-sky-500/25 border-sky-500/40 text-sky-300'
+                    : 'bg-amber-500/20 hover:bg-amber-500/30 border-amber-500/50 text-amber-300 animate-pulse'
+                }`}
+                title="View required Apple / Browser Local Network & Screen Awake permissions"
+              >
+                <ShieldCheck className="w-3 h-3" />
+                <span>Permissions</span>
+              </button>
+            )}
+
             <button
               onClick={() => {
                 setLayoutMode('split');
@@ -1273,163 +1542,73 @@ export const AndroidStageControllerView: React.FC = () => {
                   )}
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {/* REMOTE ADD BIBLE SCRIPTURE TO SCHEDULE */}
-                    <div className="p-4 rounded-2xl bg-slate-900 border-2 border-slate-700 space-y-3">
-                      <div className="flex items-center justify-between">
+                    {/* REMOTE ADD BIBLE SCRIPTURE TO SCHEDULE (UNIFIED CONTINUOUS 66-BOOK BROWSER) */}
+                    <div className="p-4 rounded-2xl bg-slate-900 border-2 border-slate-700 flex flex-col gap-2.5 h-[430px] sm:h-[460px]">
+                      <div className="flex items-center justify-between gap-2 shrink-0">
                         <span className="text-xs font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                          <BookOpen className="w-4 h-4" /> Add Bible Verse / Passage to Schedule
+                          <BookOpen className="w-4 h-4" /> Bible 66 Books (Continuous)
                         </span>
-                        <select
-                          value={remoteBibleTranslation}
-                          onChange={(e) => setRemoteBibleTranslation(e.target.value)}
-                          className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-0.5 text-[10px] font-bold text-amber-300"
-                        >
-                          {(payload.availableBibleTranslations && payload.availableBibleTranslations.length > 0
+                        <span className="text-[10px] font-mono text-slate-400">
+                          {remoteBibleVerses.length > 0
+                            ? `${remoteBibleVerses.length.toLocaleString()} verses`
+                            : remoteBibleLoading
+                            ? 'Loading...'
+                            : 'Offline'}
+                        </span>
+                      </div>
+
+                      <ContinuousBibleBrowser
+                        verses={remoteBibleVerses}
+                        selectedTranslation={remoteBibleTranslation}
+                        availableTranslations={
+                          payload.availableBibleTranslations &&
+                          payload.availableBibleTranslations.length > 0
                             ? payload.availableBibleTranslations
                             : ['KJV', 'NIV', 'NASB', 'ESV', 'MBB 1901']
-                          ).map((t) => (
-                            <option key={t} value={t}>
-                              {t}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Option A: Quick Book / Chapter / Verse Picker */}
-                      <div className="grid grid-cols-12 gap-1.5">
-                        <select
-                          value={remoteBibleBook}
-                          onChange={(e) => {
-                            setRemoteBibleBook(e.target.value);
-                            setRemoteBibleChapter(1);
-                          }}
-                          className="col-span-6 bg-slate-950 border-2 border-slate-700 rounded-xl px-2.5 py-2 text-xs font-bold text-white"
-                        >
-                          {BIBLE_BOOKS_66.map((b) => (
-                            <option key={b.name} value={b.name}>
-                              {b.number}. {b.name}
-                            </option>
-                          ))}
-                        </select>
-
-                        <select
-                          value={remoteBibleChapter}
-                          onChange={(e) => setRemoteBibleChapter(Number(e.target.value))}
-                          className="col-span-3 bg-slate-950 border-2 border-slate-700 rounded-xl px-2 py-2 text-xs font-bold text-amber-300"
-                        >
-                          {Array.from(
-                            {
-                              length:
-                                BIBLE_BOOKS_66.find((b) => b.name === remoteBibleBook)?.chapters ||
-                                150,
-                            },
-                            (_, i) => i + 1
-                          ).map((ch) => (
-                            <option key={ch} value={ch}>
-                              Ch. {ch}
-                            </option>
-                          ))}
-                        </select>
-
-                        <input
-                          type="text"
-                          value={remoteBibleVerseRange}
-                          onChange={(e) => setRemoteBibleVerseRange(e.target.value)}
-                          placeholder="16 or 1-6"
-                          className="col-span-3 bg-slate-950 border-2 border-slate-700 rounded-xl px-2 py-2 text-xs font-mono text-white text-center"
-                          title="Verse number or range (e.g. 16 or 1-6)"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          onClick={() => {
-                            const vPart = remoteBibleVerseRange.trim() || '1';
-                            const refStr = `${remoteBibleBook} ${remoteBibleChapter}:${vPart}`;
-                            dispatchRemoteAction({
-                              action: 'ADD_SCRIPTURE_TO_SCHEDULE',
-                              reference: refStr,
-                              translation: remoteBibleTranslation,
-                              goLive: false,
-                            });
-                            triggerRemoteNotice(`Added ${refStr} (${remoteBibleTranslation}) to Schedule`);
-                          }}
-                          className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border-2 border-slate-600 text-amber-300 font-bold text-xs flex items-center justify-center gap-1"
-                        >
-                          <Plus className="w-3.5 h-3.5" /> + Add {remoteBibleBook} {remoteBibleChapter}:{remoteBibleVerseRange || '1'}
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            const vPart = remoteBibleVerseRange.trim() || '1';
-                            const refStr = `${remoteBibleBook} ${remoteBibleChapter}:${vPart}`;
-                            dispatchRemoteAction({
-                              action: 'ADD_SCRIPTURE_TO_SCHEDULE',
-                              reference: refStr,
-                              translation: remoteBibleTranslation,
-                              goLive: true,
-                            });
-                            triggerRemoteNotice(`Projected ${refStr} (${remoteBibleTranslation}) Live!`);
-                            setControllerTab('slides');
-                          }}
-                          className="py-2.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1 shadow"
-                        >
-                          <Play className="w-3.5 h-3.5 fill-current" /> Project Live Now
-                        </button>
-                      </div>
-
-                      {/* Option B: Direct Reference Text Input */}
-                      <div className="pt-2 border-t border-slate-800 space-y-2">
-                        <label className="block text-[10px] font-bold uppercase text-slate-400">
-                          Or Type Any Reference (e.g. John 3:16-17, Psalms 23:1-6, Romans 8:28):
-                        </label>
-                        <div className="flex gap-1.5">
-                          <input
-                            type="text"
-                            value={remoteBibleQuickRef}
-                            onChange={(e) => setRemoteBibleQuickRef(e.target.value)}
-                            placeholder="e.g. Psalms 23:1-6"
-                            className="flex-1 bg-slate-950 border-2 border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
-                          />
-                          <button
-                            onClick={() => {
-                              if (!remoteBibleQuickRef.trim()) return;
-                              dispatchRemoteAction({
-                                action: 'ADD_SCRIPTURE_TO_SCHEDULE',
-                                reference: remoteBibleQuickRef.trim(),
-                                translation: remoteBibleTranslation,
-                                goLive: false,
-                              });
-                              triggerRemoteNotice(
-                                `Added ${remoteBibleQuickRef.trim()} (${remoteBibleTranslation}) to Schedule`
-                              );
-                              setRemoteBibleQuickRef('');
-                            }}
-                            className="px-3 py-2 rounded-xl bg-amber-500 text-slate-950 font-black text-xs shrink-0"
-                          >
-                            + Schedule
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (!remoteBibleQuickRef.trim()) return;
-                              dispatchRemoteAction({
-                                action: 'ADD_SCRIPTURE_TO_SCHEDULE',
-                                reference: remoteBibleQuickRef.trim(),
-                                translation: remoteBibleTranslation,
-                                goLive: true,
-                              });
-                              triggerRemoteNotice(
-                                `Projected ${remoteBibleQuickRef.trim()} (${remoteBibleTranslation}) Live!`
-                              );
-                              setRemoteBibleQuickRef('');
-                              setControllerTab('slides');
-                            }}
-                            className="px-3 py-2 rounded-xl bg-emerald-500 text-slate-950 font-black text-xs shrink-0"
-                          >
-                            Go Live
-                          </button>
-                        </div>
-                      </div>
+                        }
+                        onSelectTranslation={(code) => {
+                          setRemoteBibleTranslation(code);
+                          setRemoteSelectedVerseKeys([]);
+                        }}
+                        searchQuery={remoteBibleSearchQuery}
+                        onSearchQueryChange={setRemoteBibleSearchQuery}
+                        selectedVerseKeys={remoteSelectedVerseKeys}
+                        getVerseKey={getRemoteVerseKey}
+                        onSelectVerse={(v, idx, e) => {
+                          const vKey = getRemoteVerseKey(v);
+                          if (e.shiftKey && remoteBibleAnchorIdx !== null) {
+                            const start = Math.min(remoteBibleAnchorIdx, idx);
+                            const end = Math.max(remoteBibleAnchorIdx, idx);
+                            const keys = remoteBibleVerses
+                              .slice(start, end + 1)
+                              .map(getRemoteVerseKey);
+                            setRemoteSelectedVerseKeys(keys);
+                          } else {
+                            setRemoteSelectedVerseKeys([vKey]);
+                            setRemoteBibleAnchorIdx(idx);
+                          }
+                        }}
+                        onSelectVerseRange={(range) =>
+                          setRemoteSelectedVerseKeys(range.map(getRemoteVerseKey))
+                        }
+                        onDoubleClickVerse={(v) => dispatchRemotePassages([v], true)}
+                        onAddPassagesToSchedule={(targetVerses) =>
+                          dispatchRemotePassages(targetVerses, false)
+                        }
+                        onProjectPassagesLive={(targetVerses) =>
+                          dispatchRemotePassages(targetVerses, true)
+                        }
+                        onJumpToReference={(_parsed, matched, anchorIdx) => {
+                          if (matched.length > 0) {
+                            setRemoteSelectedVerseKeys(matched.map(getRemoteVerseKey));
+                            setRemoteBibleAnchorIdx(anchorIdx);
+                          }
+                        }}
+                        initialBook="John"
+                        initialChapter={3}
+                        compact
+                        isLoadingTranslation={remoteBibleLoading}
+                      />
                     </div>
 
                     {/* REMOTE ADD SONG TO SCHEDULE */}
@@ -1718,6 +1897,121 @@ export const AndroidStageControllerView: React.FC = () => {
           onClose={() => setShowAndroidLiveTour(false)}
           onOpenWrittenGuide={() => setShowHowToUseModal(true)}
         />
+      )}
+
+      {showBrowserPermissionsModal && (
+        <div
+          className="fixed inset-0 z-[115] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setShowBrowserPermissionsModal(false)}
+        >
+          <div
+            className="bg-booth-900 border-2 border-sky-500/50 rounded-2xl max-w-md w-full p-5 space-y-3.5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-300">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white">
+                    Apple &amp; Browser Permissions Checklist
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Required permissions for smooth LAN stage monitoring &amp; control
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBrowserPermissionsModal(false)}
+                className="p-1.5 rounded-lg hover:bg-booth-800 text-slate-300"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5 text-xs text-slate-300">
+              <div className="bg-booth-950 border border-booth-800 rounded-xl p-3 space-y-1">
+                <div className="font-bold text-sky-300 flex items-center justify-between">
+                  <span>1. Local Network Access (iOS / macOS / Chrome)</span>
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                      isConnected
+                        ? 'bg-emerald-500/20 text-emerald-300'
+                        : 'bg-amber-500/20 text-amber-300'
+                    }`}
+                  >
+                    {isConnected ? 'Allowed' : 'Check Access'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  <strong>iPhone / iPad / Mac Safari:</strong> Tap <strong>Allow</strong> when asked to find devices on your local network. If previously declined, open{' '}
+                  <span className="text-slate-200 font-semibold">
+                    Settings &gt; Privacy &amp; Security &gt; Local Network &gt; Safari
+                  </span>{' '}
+                  and turn it ON.
+                </p>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  <strong>Chrome / Edge:</strong> Allow the prompt to connect to local network devices if shown in the address bar.
+                </p>
+              </div>
+
+              <div className="bg-booth-950 border border-booth-800 rounded-xl p-3 space-y-1">
+                <div className="font-bold text-amber-300 flex items-center justify-between">
+                  <span>2. Keep Screen Awake (Stage Monitor)</span>
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                      wakeLockActive
+                        ? 'bg-emerald-500/20 text-emerald-300'
+                        : 'bg-slate-700/60 text-slate-300'
+                    }`}
+                  >
+                    {wakeLockSupported ? (wakeLockActive ? 'Active' : 'Tap to Enable') : 'OS Auto-Lock'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  {wakeLockSupported
+                    ? 'Prevents your phone or tablet screen from sleeping while projecting live stage lyrics.'
+                    : 'This browser does not support automatic Screen Wake Lock. Set iOS Settings > Display & Brightness > Auto-Lock to Never during worship.'}
+                </p>
+              </div>
+
+              <div className="bg-booth-950 border border-booth-800 rounded-xl p-3 space-y-1">
+                <div className="font-bold text-emerald-300">3. Windows PC Firewall &amp; Wi-Fi</div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Confirm both devices share the same Wi-Fi and that Windows PC clicked{' '}
+                  <strong>Allow Firewall Access (Admin)</strong> inside FreeWorship Studio&apos;s{' '}
+                  <strong>Mobile / QR</strong> menu.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (wakeLockSupported) {
+                    setWakeLockWanted(true);
+                    await requestScreenWakeLock(true);
+                  }
+                  await connectToHost(hostInput);
+                  setShowBrowserPermissionsModal(false);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs transition"
+              >
+                Allow Screen Awake &amp; Reconnect
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowBrowserPermissionsModal(false)}
+                className="px-3.5 py-2 rounded-xl bg-booth-800 hover:bg-booth-700 text-white font-bold text-xs transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Floating Success Notification Banner when Android 3rd Monitor connects */}

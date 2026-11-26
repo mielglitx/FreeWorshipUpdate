@@ -87,7 +87,6 @@ import { AndroidStageControllerView } from './components/AndroidStageControllerV
 import { SongEditorModal } from './components/SongEditorModal';
 import { MotionBackgroundCanvas } from './components/MotionBackgroundCanvas';
 import {
-  BIBLE_BOOKS_66,
   BIBLE_EDITIONS,
   BuiltInBibleEdition,
   fetchAndInstallPublicDomainBible,
@@ -98,7 +97,9 @@ import {
   parseScriptureReference,
   resolveBookName,
   saveBibleToIndexedDB,
+  sortVersesCanonically,
 } from './services/bibleImporter';
+import { ContinuousBibleBrowser } from './components/ContinuousBibleBrowser';
 import {
   saveSongsToIndexedDB,
   loadSongsFromIndexedDB,
@@ -139,6 +140,11 @@ import {
   normalizeSongItem,
   parseBackupOrModuleJson,
 } from './services/backupService';
+import {
+  exportScheduleItemToPptx,
+  exportScheduleToPptx,
+  exportSongToPptx,
+} from './services/pptxExporter';
 
 type LeftTab = 'songs' | 'scripture' | 'media' | 'audio' | 'themes';
 
@@ -371,8 +377,6 @@ const OperatorConsole: React.FC = () => {
 
   // Scripture Engine State
   const [selectedTranslation, setSelectedTranslation] = useState<string>('KJV');
-  const [selectedBook, setSelectedBook] = useState<string>('Psalms');
-  const [selectedChapter, setSelectedChapter] = useState<number>(23);
   const [scriptureSearch, setScriptureSearch] = useState<string>('');
 
   // Keyboard Shortcuts Help Popover & Import/Export Data Studio Modal
@@ -401,12 +405,18 @@ const OperatorConsole: React.FC = () => {
       window.clearTimeout(toastTimerRef.current);
     }
     const label = deviceName.replace(/-/g, ' ');
+    const isAppleOrWeb =
+      /apple|ios|mac|safari|browser|web/i.test(deviceName);
     setAndroidToast({
       id: Date.now(),
       type,
       title:
         type === 'connected'
-          ? '3rd Monitor (Android) Connected!'
+          ? isAppleOrWeb
+            ? 'Apple / Web Remote Connected!'
+            : '3rd Monitor (Android) Connected!'
+          : isAppleOrWeb
+          ? 'Apple / Web Remote Disconnected'
           : '3rd Monitor (Android) Disconnected',
       subtitle:
         type === 'connected'
@@ -1514,6 +1524,36 @@ const OperatorConsole: React.FC = () => {
     e.target.value = '';
   };
 
+  // Export Service Schedule or Active Deck to Microsoft PowerPoint (.pptx)
+  const handleExportScheduleToPptx = async () => {
+    if (schedule.length === 0) return;
+    try {
+      const { filename, slideCount } = await exportScheduleToPptx(
+        schedule,
+        themes,
+        activeTheme
+      );
+      setScheduleNotice(`Exported ${slideCount} slides to ${filename}`);
+      setTimeout(() => setScheduleNotice(null), 4000);
+    } catch (err) {
+      console.error('Failed to export schedule as PPTX:', err);
+      setScheduleNotice('Could not export PowerPoint file.');
+      setTimeout(() => setScheduleNotice(null), 4000);
+    }
+  };
+
+  const handleExportActiveItemToPptx = async () => {
+    if (!activeItem) return;
+    try {
+      const matchedTheme = themes.find((t) => t.id === activeItem.themeId) || activeTheme;
+      const { filename, slideCount } = await exportScheduleItemToPptx(activeItem, matchedTheme);
+      setScheduleNotice(`Exported "${activeItem.title}" (${slideCount} slides) to ${filename}`);
+      setTimeout(() => setScheduleNotice(null), 4000);
+    } catch (err) {
+      console.error('Failed to export active item as PPTX:', err);
+    }
+  };
+
   // =========================================================================
   // 66-BOOK OFFLINE SCRIPTURE ENGINE & JSON/XML BIBLE IMPORTER
   // =========================================================================
@@ -1575,53 +1615,17 @@ const OperatorConsole: React.FC = () => {
     return source;
   }, [customBibles, selectedTranslation]);
 
-  const availableChaptersForBook = useMemo(() => {
-    const bookChapters = Array.from(
-      new Set(
-        activeTranslationVerses
-          .filter((v) => v.book.toLowerCase() === selectedBook.toLowerCase())
-          .map((v) => v.chapter)
-      )
-    ).sort((a, b) => a - b);
+  const canonicalBibleVerses: BibleVerse[] = useMemo(() => {
+    return sortVersesCanonically(activeTranslationVerses);
+  }, [activeTranslationVerses]);
 
-    if (bookChapters.length > 0) return bookChapters;
-    const canonBook = BIBLE_BOOKS_66.find((b) => b.name === selectedBook);
-    const total = canonBook?.chapters || 1;
-    return Array.from({ length: total }, (_, idx) => idx + 1);
-  }, [activeTranslationVerses, selectedBook]);
-
-  const filteredVerses = useMemo(() => {
-    const query = scriptureSearch.trim();
-    if (query) {
-      // 1. Check if the operator typed a structured reference like "John 3:16-17" or "Ps 23:1-6"
-      const parsedRef = parseScriptureReference(query);
-      if (parsedRef) {
-        return activeTranslationVerses.filter((v) => {
-          if (v.book.toLowerCase() !== parsedRef.book.toLowerCase()) return false;
-          if (v.chapter !== parsedRef.chapter) return false;
-          if (parsedRef.verseStart !== undefined) {
-            const end = parsedRef.verseEnd ?? parsedRef.verseStart;
-            return v.verse >= parsedRef.verseStart && v.verse <= end;
-          }
-          return true;
-        });
-      }
-
-      // 2. Otherwise perform full-text keyword or partial reference search
-      const q = query.toLowerCase();
-      return activeTranslationVerses
-        .filter(
-          (v) =>
-            v.text.toLowerCase().includes(q) ||
-            `${v.book} ${v.chapter}:${v.verse}`.toLowerCase().includes(q)
-        )
-        .slice(0, 120);
+  const canonicalVerseMap = useMemo(() => {
+    const map = new Map<string, BibleVerse>();
+    for (const v of canonicalBibleVerses) {
+      map.set(`${v.translation}-${v.book}-${v.chapter}-${v.verse}`, v);
     }
-
-    return activeTranslationVerses.filter(
-      (v) => v.book.toLowerCase() === selectedBook.toLowerCase() && v.chapter === selectedChapter
-    );
-  }, [activeTranslationVerses, selectedBook, selectedChapter, scriptureSearch]);
+    return map;
+  }, [canonicalBibleVerses]);
 
   // Import local JSON / XML 66-book Bible file
   const handleBibleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1886,7 +1890,7 @@ const OperatorConsole: React.FC = () => {
     if (e.shiftKey && lastClickedVerseIdx !== null) {
       const start = Math.min(lastClickedVerseIdx, index);
       const end = Math.max(lastClickedVerseIdx, index);
-      const rangeKeys = filteredVerses.slice(start, end + 1).map(getVerseKey);
+      const rangeKeys = canonicalBibleVerses.slice(start, end + 1).map(getVerseKey);
       setSelectedVerseKeys((prev) => Array.from(new Set([...prev, ...rangeKeys])));
     } else if (e.ctrlKey || e.metaKey) {
       setSelectedVerseKeys((prev) =>
@@ -2045,8 +2049,9 @@ const OperatorConsole: React.FC = () => {
         const toAdd = songs.filter((s) => parsed.ids.includes(s.id));
         toAdd.forEach((s) => addSongToSchedule(s, false));
       } else if (parsed.category === 'scripture') {
-        const keySet = new Set(parsed.ids);
-        const versesToAdd = filteredVerses.filter((v) => keySet.has(getVerseKey(v)));
+        const versesToAdd = parsed.ids
+          .map((id) => canonicalVerseMap.get(id))
+          .filter((v): v is BibleVerse => Boolean(v));
         if (versesToAdd.length > 0) {
           sendVerseListToSchedule(versesToAdd, false);
         }
@@ -2977,6 +2982,36 @@ const OperatorConsole: React.FC = () => {
                     <kbd className="text-[10px] text-slate-400 font-mono">Ctrl+S</kbd>
                   </button>
 
+                  <button
+                    type="button"
+                    disabled={schedule.length === 0}
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      handleExportScheduleToPptx();
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group disabled:opacity-40"
+                  >
+                    <span className="flex items-center gap-2">
+                      <FileText className="w-3.5 h-3.5 text-amber-400 group-hover:text-amber-300" />
+                      <span>Export Schedule as PowerPoint (.pptx)...</span>
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={!activeItem}
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      handleExportActiveItemToPptx();
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group disabled:opacity-40"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Download className="w-3.5 h-3.5 text-amber-400 group-hover:text-amber-300" />
+                      <span>Export Active Deck as PowerPoint (.pptx)</span>
+                    </span>
+                  </button>
+
                   <div className="my-1 border-t border-booth-800" />
 
                   <button
@@ -3306,7 +3341,7 @@ const OperatorConsole: React.FC = () => {
                   >
                     <span className="flex items-center gap-2">
                       <Smartphone className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Android Remote & Wi-Fi Setup...</span>
+                      <span>Mobile Remote &amp; QR Setup (Android / Apple)...</span>
                     </span>
                     {headerConnectedClients > 0 && (
                       <span className="text-[10px] text-emerald-400 font-bold">
@@ -3557,7 +3592,7 @@ const OperatorConsole: React.FC = () => {
             </button>
           )}
 
-          {/* Accessible Android APK & 3rd Monitor Quick Button */}
+          {/* Accessible Android APK & Apple Web Remote QR Quick Button */}
           <button
             data-tour="pc-android-btn"
             type="button"
@@ -3567,15 +3602,15 @@ const OperatorConsole: React.FC = () => {
                 ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30'
                 : 'bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border-sky-500/35'
             }`}
-            title={`Download Android APK & Connect 3rd Monitor (${headerLanIp || 'Wi-Fi'})${
+            title={`Android APK Download & Apple / Web Browser Remote QR (${headerLanIp || 'Wi-Fi'})${
               headerConnectedClients > 0 ? ` • ${headerConnectedClients} Connected` : ''
             }`}
           >
             <Smartphone className="w-3 h-3" />
             <span className="hidden sm:inline">
               {headerConnectedClients > 0
-                ? `Android (${headerConnectedClients})`
-                : 'Android APK'}
+                ? `Remote (${headerConnectedClients})`
+                : 'Mobile / QR'}
             </span>
             {headerConnectedClients > 0 && (
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -3899,6 +3934,13 @@ const OperatorConsole: React.FC = () => {
                             <Download className="w-3.5 h-3.5" />
                           </button>
                           <button
+                            onClick={() => exportSongToPptx(song, activeTheme)}
+                            className="px-1.5 py-1 rounded bg-booth-850 hover:bg-booth-700 text-amber-300 border border-booth-700 text-[10px] font-black"
+                            title="Export this song as Microsoft PowerPoint (.pptx)"
+                          >
+                            .PPTX
+                          </button>
+                          <button
                             onClick={() => {
                               setEditingSong(song);
                               setSongModalOpen(true);
@@ -4001,167 +4043,49 @@ const OperatorConsole: React.FC = () => {
                 )}
               </div>
 
-              {/* Translation, 66-Book Selector (OT & NT), and Chapter Selector */}
-              <div className="grid grid-cols-12 gap-1.5">
-                <select
-                  value={selectedTranslation}
-                  onChange={(e) => setSelectedTranslation(e.target.value)}
-                  className="col-span-3 bg-booth-950 border border-booth-700 rounded-lg px-2 py-2 text-xs font-bold text-amber-300 focus:outline-none"
-                >
-                  {availableTranslations.map((code) => (
-                    <option key={code} value={code}>
-                      {code}
-                    </option>
-                  ))}
-                </select>
-
-                <select
-                  value={selectedBook}
-                  onChange={(e) => {
-                    const b = e.target.value;
-                    setSelectedBook(b);
-                    setScriptureSearch('');
-                    const firstChap =
-                      activeTranslationVerses.find(
-                        (v) => v.book.toLowerCase() === b.toLowerCase()
-                      )?.chapter || 1;
-                    setSelectedChapter(firstChap);
-                  }}
-                  className="col-span-6 bg-booth-950 border border-booth-700 rounded-lg px-2 py-2 text-xs text-white focus:outline-none"
-                >
-                  <optgroup label="Old Testament (39 Books)">
-                    {BIBLE_BOOKS_66.filter((b) => b.testament === 'OT').map((b) => (
-                      <option key={b.name} value={b.name}>
-                        {b.number}. {b.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="New Testament (27 Books)">
-                    {BIBLE_BOOKS_66.filter((b) => b.testament === 'NT').map((b) => (
-                      <option key={b.name} value={b.name}>
-                        {b.number}. {b.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                </select>
-
-                <select
-                  value={selectedChapter}
-                  onChange={(e) => {
-                    setSelectedChapter(Number(e.target.value));
-                    setScriptureSearch('');
-                  }}
-                  className="col-span-3 bg-booth-950 border border-booth-700 rounded-lg px-2 py-2 text-xs text-white focus:outline-none"
-                >
-                  {availableChaptersForBook.map((c) => (
-                    <option key={c} value={c}>
-                      Ch. {c}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Smart Reference & Keyword Search */}
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                <input
-                  type="text"
-                  value={scriptureSearch}
-                  onChange={(e) => setScriptureSearch(e.target.value)}
-                  placeholder="Type reference (John 3:16-17, Ps 23:1-4, Rom 8:28) or keyword..."
-                  className="w-full bg-booth-950 border border-booth-700 rounded-lg pl-9 pr-3 py-2 text-xs text-white focus:border-amber-400 focus:outline-none"
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] text-slate-400 font-semibold">
-                  {selectedVerseKeys.length > 1
-                    ? `${selectedVerseKeys.length} Verses Selected`
-                    : `${filteredVerses.length} Verses Shown`}
-                </span>
-                <div className="flex gap-1.5">
-                  <button
-                    onClick={() => {
-                      const targetVerses =
-                        selectedVerseKeys.length > 0
-                          ? filteredVerses.filter((v) =>
-                              selectedVerseKeys.includes(getVerseKey(v))
-                            )
-                          : filteredVerses;
-                      sendVerseListToSchedule(targetVerses, false);
-                    }}
-                    className="px-2.5 py-1 rounded bg-booth-800 hover:bg-booth-700 text-xs font-bold text-amber-300 border border-booth-600"
-                  >
-                    {selectedVerseKeys.length > 1
-                      ? `+ Schedule (${selectedVerseKeys.length})`
-                      : '+ Schedule Passage'}
-                  </button>
-                  <button
-                    onClick={() => {
-                      const targetVerses =
-                        selectedVerseKeys.length > 0
-                          ? filteredVerses.filter((v) =>
-                              selectedVerseKeys.includes(getVerseKey(v))
-                            )
-                          : filteredVerses;
-                      showScriptureOnLiveDirectly(targetVerses, 0);
-                    }}
-                    className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white"
-                    title="Project scripture directly to Live View without modifying schedule"
-                  >
-                    {selectedVerseKeys.length > 1
-                      ? `Project (${selectedVerseKeys.length})`
-                      : 'Project Passage'}
-                  </button>
-                </div>
-              </div>
-
-              <div data-tour="pc-song-list" className="flex-1 overflow-y-auto space-y-2 pr-1">
-                {filteredVerses.map((v, idx) => {
+              {/* Continuous 66-Book Bible Browser & Single Autocomplete Bar */}
+              <ContinuousBibleBrowser
+                verses={canonicalBibleVerses}
+                selectedTranslation={selectedTranslation}
+                availableTranslations={availableTranslations}
+                onSelectTranslation={(code) => {
+                  setSelectedTranslation(code);
+                  setSelectedVerseKeys([]);
+                }}
+                searchQuery={scriptureSearch}
+                onSearchQueryChange={setScriptureSearch}
+                selectedVerseKeys={selectedVerseKeys}
+                getVerseKey={getVerseKey}
+                onSelectVerse={(v, idx, e) => handleVerseItemSelect(v, idx, e, false)}
+                onSelectVerseRange={(range) =>
+                  setSelectedVerseKeys(range.map(getVerseKey))
+                }
+                onDoubleClickVerse={(v) => showScriptureOnLiveDirectly([v], 0)}
+                onContextMenuVerse={(v, idx, e) => {
+                  e.preventDefault();
                   const vKey = getVerseKey(v);
-                  const isMultiSelected = selectedVerseKeys.includes(vKey);
-                  return (
-                    <div
-                      key={`${v.book}-${v.chapter}-${v.verse}-${idx}`}
-                      draggable
-                      onDragStart={(e) => {
-                        const keysToDrag = selectedVerseKeys.includes(vKey)
-                          ? selectedVerseKeys
-                          : [vKey];
-                        e.dataTransfer.setData(
-                          'application/x-freeworship-items',
-                          JSON.stringify({ category: 'scripture', ids: keysToDrag })
-                        );
-                      }}
-                      onClick={(e) => handleVerseItemSelect(v, idx, e, false)}
-                      onDoubleClick={() => showScriptureOnLiveDirectly([v], 0)}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        if (!selectedVerseKeys.includes(vKey)) {
-                          setSelectedVerseKeys([vKey]);
-                          setLastClickedVerseIdx(idx);
-                        }
-                        setContextMenu({ x: e.clientX, y: e.clientY, category: 'scripture' });
-                      }}
-                      className={`bg-booth-950 border-2 rounded-xl p-3 cursor-pointer transition group ${
-                        isMultiSelected
-                          ? 'border-amber-400 bg-amber-950/25 shadow-md'
-                          : 'border-booth-700 hover:border-emerald-500/60'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-bold text-emerald-400">
-                          {v.book} {v.chapter}:{v.verse} ({v.translation})
-                        </span>
-                        <span className="text-[10px] text-slate-400 group-hover:text-emerald-300">
-                          {isMultiSelected ? '✓ Selected' : 'Click / Ctrl+Click / Drag →'}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-200 leading-relaxed font-serif">{v.text}</p>
-                    </div>
-                  );
-                })}
-              </div>
+                  if (!selectedVerseKeys.includes(vKey)) {
+                    setSelectedVerseKeys([vKey]);
+                    setLastClickedVerseIdx(idx);
+                  }
+                  setContextMenu({ x: e.clientX, y: e.clientY, category: 'scripture' });
+                }}
+                onAddPassagesToSchedule={(versesToAdd) =>
+                  sendVerseListToSchedule(versesToAdd, false)
+                }
+                onProjectPassagesLive={(versesToLive) =>
+                  showScriptureOnLiveDirectly(versesToLive, 0)
+                }
+                onJumpToReference={(_parsed, matched, anchorIdx) => {
+                  if (matched.length > 0) {
+                    setSelectedVerseKeys(matched.map(getVerseKey));
+                    setLastClickedVerseIdx(anchorIdx);
+                  }
+                }}
+                initialBook="Psalms"
+                initialChapter={23}
+                listTourId="pc-song-list"
+              />
             </div>
           )}
 
@@ -4924,23 +4848,32 @@ const OperatorConsole: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-3 gap-1.5">
               <button
                 onClick={() => scheduleJsonImportInputRef.current?.click()}
-                className="py-1 px-2 rounded-lg bg-booth-900 hover:bg-booth-800 border border-booth-700 text-[10px] font-bold text-sky-300 flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95"
+                className="py-1 px-2 rounded-lg bg-booth-900 hover:bg-booth-800 border border-booth-700 text-[10px] font-bold text-sky-300 flex items-center justify-center gap-1 shadow-sm transition active:scale-95"
                 title="Load a saved Service Schedule from a file (.fws.json or .json)"
               >
                 <FolderOpen className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                <span className="truncate">Load Schedule</span>
+                <span className="truncate">Load</span>
               </button>
               <button
                 onClick={handleSaveScheduleToFile}
                 disabled={schedule.length === 0}
-                className="py-1 px-2 rounded-lg bg-booth-900 hover:bg-booth-800 border border-booth-700 text-[10px] font-bold text-emerald-300 flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                className="py-1 px-2 rounded-lg bg-booth-900 hover:bg-booth-800 border border-booth-700 text-[10px] font-bold text-emerald-300 flex items-center justify-center gap-1 shadow-sm transition active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
                 title="Save current Service Schedule to an offline file (.fws.json)"
               >
                 <Save className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span className="truncate">Save Schedule</span>
+                <span className="truncate">Save</span>
+              </button>
+              <button
+                onClick={handleExportScheduleToPptx}
+                disabled={schedule.length === 0}
+                className="py-1 px-2 rounded-lg bg-booth-900 hover:bg-booth-800 border border-amber-500/40 text-[10px] font-bold text-amber-300 flex items-center justify-center gap-1 shadow-sm transition active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                title="Export Service Schedule as Microsoft PowerPoint (.pptx) presentation"
+              >
+                <Download className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="truncate">Export .PPTX</span>
               </button>
             </div>
 
@@ -5278,9 +5211,9 @@ const OperatorConsole: React.FC = () => {
                         const toAdd = songs.filter((s) => selectedSongIds.includes(s.id));
                         toAdd.forEach((s) => addSongToSchedule(s, false));
                       } else if (contextMenu.category === 'scripture') {
-                        const toAdd = filteredVerses.filter((v) =>
-                          selectedVerseKeys.includes(getVerseKey(v))
-                        );
+                        const toAdd = selectedVerseKeys
+                          .map((k) => canonicalVerseMap.get(k))
+                          .filter((v): v is BibleVerse => Boolean(v));
                         sendVerseListToSchedule(toAdd, false);
                       } else if (contextMenu.category === 'media') {
                         const toAdd = mediaPool.filter((m) => selectedMediaIds.includes(m.id));
@@ -5302,9 +5235,9 @@ const OperatorConsole: React.FC = () => {
                           showSongOnLiveDirectly(toAdd[0], 0);
                         }
                       } else if (contextMenu.category === 'scripture') {
-                        const toAdd = filteredVerses.filter((v) =>
-                          selectedVerseKeys.includes(getVerseKey(v))
-                        );
+                        const toAdd = selectedVerseKeys
+                          .map((k) => canonicalVerseMap.get(k))
+                          .filter((v): v is BibleVerse => Boolean(v));
                         if (toAdd.length > 0) {
                           showScriptureOnLiveDirectly(toAdd, 0);
                         }

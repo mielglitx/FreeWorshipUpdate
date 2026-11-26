@@ -41,6 +41,10 @@ import {
   importOpenLyricsOrXmlSong,
   importPptxFile,
 } from '../services/fileImporters';
+import {
+  exportScheduleToPptx,
+  exportSongsLibraryToPptx,
+} from '../services/pptxExporter';
 
 interface ImportExportModalProps {
   songs: SongItem[];
@@ -525,14 +529,33 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
                 </button>
               </div>
 
-              <button
-                type="button"
-                onClick={handleExportAllSongsOpenLyrics}
-                className="w-full py-1.5 px-3 rounded-lg bg-booth-900 hover:bg-booth-850 border border-booth-800 text-[11px] font-semibold text-sky-300 flex items-center justify-center gap-1.5"
-              >
-                <FileCode className="w-3.5 h-3.5" />
-                <span>Export All Songs as OpenLyrics (.xml) Files</span>
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={handleExportAllSongsOpenLyrics}
+                  className="py-1.5 px-3 rounded-lg bg-booth-900 hover:bg-booth-850 border border-booth-800 text-[11px] font-semibold text-sky-300 flex items-center justify-center gap-1.5"
+                >
+                  <FileCode className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">Export OpenLyrics (.xml)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const { filename, slideCount } = await exportSongsLibraryToPptx(
+                      songs,
+                      themes[0]
+                    );
+                    setStatusMessage({
+                      type: 'success',
+                      text: `Exported ${songs.length} songs (${slideCount} slides) to ${filename}.`,
+                    });
+                  }}
+                  className="py-1.5 px-3 rounded-lg bg-booth-900 hover:bg-booth-850 border border-amber-500/40 text-[11px] font-semibold text-amber-300 flex items-center justify-center gap-1.5"
+                >
+                  <FileText className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">Export PowerPoint (.pptx)</span>
+                </button>
+              </div>
             </div>
 
             {/* 2. BIBLES IMPORT / EXPORT */}
@@ -627,14 +650,14 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
                 Save your complete service order (songs, scripture readings, announcements, and sermon slides) as a portable <span className="text-slate-200 font-semibold">.fws.json</span> schedule file, or import a <span className="text-slate-200 font-semibold">PowerPoint (.pptx)</span> deck.
               </p>
 
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-booth-800">
+              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-booth-800">
                 <button
                   type="button"
                   onClick={() => scheduleInputRef.current?.click()}
-                  className="py-2 px-3 rounded-xl bg-booth-850 hover:bg-booth-800 border border-booth-700 text-xs font-bold text-white flex items-center justify-center gap-1.5"
+                  className="py-2 px-2.5 rounded-xl bg-booth-850 hover:bg-booth-800 border border-booth-700 text-xs font-bold text-white flex items-center justify-center gap-1.5"
                 >
-                  <FileUp className="w-3.5 h-3.5 text-sky-400" />
-                  <span>Import Schedule / .PPTX</span>
+                  <FileUp className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                  <span className="truncate">Import .fws / .pptx</span>
                 </button>
 
                 <button
@@ -646,10 +669,30 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
                       text: `Exported Service Schedule (${schedule.length} items) to .fws.json.`,
                     });
                   }}
-                  className="py-2 px-3 rounded-xl bg-sky-500 hover:bg-sky-400 text-black font-black text-xs flex items-center justify-center gap-1.5"
+                  className="py-2 px-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-black font-black text-xs flex items-center justify-center gap-1.5"
                 >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Export Schedule (.fws.json)</span>
+                  <Download className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">Export .fws.json</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={schedule.length === 0}
+                  onClick={async () => {
+                    const { filename, slideCount } = await exportScheduleToPptx(
+                      schedule,
+                      themes,
+                      themes[0]
+                    );
+                    setStatusMessage({
+                      type: 'success',
+                      text: `Exported Service Schedule (${slideCount} slides) to ${filename}.`,
+                    });
+                  }}
+                  className="py-2 px-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-black text-xs flex items-center justify-center gap-1.5 disabled:opacity-40"
+                >
+                  <FileText className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">Export .pptx</span>
                 </button>
               </div>
             </div>

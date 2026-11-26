@@ -28,23 +28,21 @@ if (!token) {
 
 const REPO_OWNER = 'mielglitx';
 const REPO_NAME = 'FreeWorshipUpdate';
-const TAG_NAME = 'v1.1.8';
-const RELEASE_TITLE = 'FreeWorship v1.1.8 - VS Code Titlebar, QR Android Setup, Firewall Helper, UDP Discovery & Live Guided Tour';
+const TAG_NAME = 'v1.1.9';
+const RELEASE_TITLE = 'FreeWorship v1.1.9 - Apple / Browser Web Remote, PowerPoint Export & Continuous 66-Book Bible Lookup';
 
-const RELEASE_BODY = `## FreeWorship v1.1.8 Update
+const RELEASE_BODY = `## FreeWorship v1.1.9 Update
 
 ### 🚀 Highlights & Major Features
-- **Interactive On-Interface Guided Tour & Natural Voice-Over**: Open \`Help > How to Use\` and start the live spotlight tour directly on the FreeWorship interface (both PC desktop and Android simulator), complete with 15 natural voice-over clips.
-- **Top-Bar Android APK Button & Offline QR Code Download**: Access the Android installer directly from the top bar and scan the offline QR code on your phone to download \`FreeWorship-StageController.apk\` over local Wi-Fi.
-- **Windows Firewall Helper with Live Status Check**: One-click UAC-elevated firewall setup for TCP ports \`5174, 5173\` and UDP port \`41234\` with automatic green **"Already Allowed"** verification.
-- **UDP Broadcast + Native Multi-Threaded PC Discovery**: Fast, reliable Android auto-discovery across local Wi-Fi routers and hotspots with live connection notifications on both PC and Android.
-- **Remote Android Upgrades**: Dynamic built-in Bible loading, custom song authoring from Android, synced translations, and focused \`ON AIR\`-only slide highlighting.
-- **Official Logo Branding, 2nd Monitor Titles & VS Code Titlebar**: Integrated FreeWorship emblem across app/splash/icons, projector/live song & scripture title overlays, and sleek 36px desktop menu bar (\`File\`, \`Output\`, \`View\`, \`Tools\`, \`Help\`).
+- **Apple / Browser Web Remote + Built-in LAN Web Server**: Scan the dedicated **Apple / Web Remote QR code** inside \`Mobile / QR\` to open the live Stage Confidence Monitor & Remote Controller directly in iPhone/iPad/Mac Safari (\`http://<PC-IP>:5174/remote\`)—while keeping the **Android APK QR code** intact.
+- **Host & Browser Permissions**: Proactive Windows Firewall port + app permission check, Chromium Private Network Access headers, iOS Local Network guidance, and Screen Wake Lock (\`Keep Screen Awake\`).
+- **Export as Microsoft PowerPoint (.pptx)**: Export entire Service Schedules, active slide decks, or individual songs to 16:9 \`.pptx\` presentations directly from the File menu, Schedule header, Song cards, and Import/Export Hub.
+- **Unified Continuous 66-Book Bible Lookup (PC & Mobile/Web)**: Single lookup bar with OT-first / NT-second autocomplete suggestions, jump-and-highlight navigation keeping surrounding verses visible, and continuous virtualized scroll from Genesis 1:1 to Revelation 22:21.
 
 ### 📥 Direct Downloads
-- **Windows Setup Installer**: [FreeWorship-Studio-Setup-1.1.8.exe](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.8/FreeWorship-Studio-Setup-1.1.8.exe)
-- **Windows Portable**: [FreeWorship-Studio-Portable-1.1.8.exe](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.8/FreeWorship-Studio-Portable-1.1.8.exe)
-- **Android Remote APK**: [FreeWorship-StageController.apk](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.8/FreeWorship-StageController.apk)
+- **Windows Setup Installer**: [FreeWorship-Studio-Setup-1.1.9.exe](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.9/FreeWorship-Studio-Setup-1.1.9.exe)
+- **Windows Portable**: [FreeWorship-Studio-Portable-1.1.9.exe](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.9/FreeWorship-Studio-Portable-1.1.9.exe)
+- **Android Remote APK**: [FreeWorship-StageController.apk](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.9/FreeWorship-StageController.apk)
 `;
 
 function request(options, data) {
@@ -172,13 +170,13 @@ async function main() {
   const existingAssets = release.assets || [];
   const filesToUpload = [
     {
-      filePath: path.resolve(__dirname, '../release/FreeWorship Studio-Setup-1.1.8.exe'),
-      name: 'FreeWorship-Studio-Setup-1.1.8.exe',
+      filePath: path.resolve(__dirname, '../release/FreeWorship Studio-Setup-1.1.9.exe'),
+      name: 'FreeWorship-Studio-Setup-1.1.9.exe',
       contentType: 'application/vnd.microsoft.portable-executable',
     },
     {
-      filePath: path.resolve(__dirname, '../release/FreeWorship Studio-Portable-1.1.8.exe'),
-      name: 'FreeWorship-Studio-Portable-1.1.8.exe',
+      filePath: path.resolve(__dirname, '../release/FreeWorship Studio-Portable-1.1.9.exe'),
+      name: 'FreeWorship-Studio-Portable-1.1.9.exe',
       contentType: 'application/vnd.microsoft.portable-executable',
     },
     {

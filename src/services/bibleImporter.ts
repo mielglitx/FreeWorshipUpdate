@@ -122,18 +122,33 @@ export interface ParsedScriptureRef {
  * - "Ps 23:1-6"
  * - "1 Cor 13:4-8"
  * - "Romans 8"
+ * - "Ex 14 14"
  */
 export function parseScriptureReference(query: string): ParsedScriptureRef | null {
   const trimmed = query.trim();
   if (!trimmed) return null;
 
-  const match = trimmed.match(/^([1-3]?\s*[a-zA-Z.\s]+?)\s+(\d+)(?::(\d+)(?:\s*[-–]\s*(\d+))?)?$/);
+  const match = trimmed.match(
+    /^([1-3]?\s*[a-zA-Z.\s]+?)\s+(\d+)(?:\s*[:.\s]\s*(\d+)(?:\s*[-–]\s*(\d+))?)?$/
+  );
   if (!match) return null;
 
   const rawBook = match[1].trim();
-  const resolved = resolveBookName(rawBook);
-  const exists = BIBLE_BOOKS_66.some((b) => b.name.toLowerCase() === resolved.toLowerCase());
-  if (!exists) return null;
+  let resolved = resolveBookName(rawBook);
+  let matchedBook = BIBLE_BOOKS_66.find(
+    (b) => b.name.toLowerCase() === resolved.toLowerCase()
+  );
+
+  // Fallback to prefix suggestion for 2+ char book shorthands like "ex 14:14" or "jo 3:16"
+  if (!matchedBook && rawBook.replace(/\./g, '').trim().length >= 2) {
+    const prefixHits = suggestBibleBooks(rawBook);
+    if (prefixHits.length > 0) {
+      matchedBook = prefixHits[0];
+      resolved = matchedBook.name;
+    }
+  }
+
+  if (!matchedBook) return null;
 
   const chapter = parseInt(match[2], 10);
   const verseStart = match[3] ? parseInt(match[3], 10) : undefined;
@@ -145,6 +160,142 @@ export function parseScriptureReference(query: string): ParsedScriptureRef | nul
     verseStart,
     verseEnd,
   };
+}
+
+/**
+ * Returns matching Bible books ordered strictly from Old Testament (#1–#39)
+ * then New Testament (#40–#66). E.g. typing "e" yields:
+ * Exodus, Ezra, Esther, Ecclesiastes, Ezekiel, Ephesians.
+ */
+export function suggestBibleBooks(query: string): CanonicalBook[] {
+  const cleaned = query
+    .trim()
+    .toLowerCase()
+    .replace(/\./g, '')
+    .replace(/\s+/g, ' ');
+  if (!cleaned) return BIBLE_BOOKS_66;
+
+  const compact = cleaned.replace(/[\s\-_]/g, '');
+  const primary: CanonicalBook[] = [];
+  const aliasMatches: CanonicalBook[] = [];
+
+  for (const book of BIBLE_BOOKS_66) {
+    const nameLower = book.name.toLowerCase();
+    const nameCompact = nameLower.replace(/[\s\-_]/g, '');
+
+    if (nameLower.startsWith(cleaned) || nameCompact.startsWith(compact)) {
+      primary.push(book);
+      continue;
+    }
+
+    // Match localized or standard aliases when 2+ chars typed (e.g., "ps" -> Psalms, "awit" -> Psalms)
+    if (
+      cleaned.length >= 2 &&
+      book.aliases.some(
+        (alias) =>
+          alias.startsWith(cleaned) ||
+          alias.replace(/[\s\-_]/g, '').startsWith(compact)
+      )
+    ) {
+      aliasMatches.push(book);
+    }
+  }
+
+  // Merge keeping OT -> NT order inside primary first, then alias matches
+  const seen = new Set(primary.map((b) => b.number));
+  const combined = [...primary];
+  for (const b of aliasMatches) {
+    if (!seen.has(b.number)) {
+      combined.push(b);
+      seen.add(b.number);
+    }
+  }
+  return combined;
+}
+
+export type LiveBibleParseResult =
+  | { kind: 'empty'; suggestions: CanonicalBook[] }
+  | {
+      kind: 'book-prefix';
+      bookQuery: string;
+      suggestions: CanonicalBook[];
+      exactBook?: CanonicalBook;
+    }
+  | { kind: 'reference'; ref: ParsedScriptureRef; suggestions: CanonicalBook[] }
+  | { kind: 'keyword'; keyword: string };
+
+/**
+ * Classifies live user typing in the unified Bible lookup bar:
+ * - Reference ("John 3:16", "Ps 23:1-6", "Gen 1") -> jump & highlight
+ * - Book prefix ("e", "ez", "1 cor") -> live OT-then-NT book suggestions
+ * - Keyword ("for god so loved") -> keyword jump list
+ */
+export function parseLiveBibleInput(query: string): LiveBibleParseResult {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return { kind: 'empty', suggestions: BIBLE_BOOKS_66 };
+  }
+
+  const ref = parseScriptureReference(trimmed);
+  if (ref) {
+    const matched = BIBLE_BOOKS_66.find(
+      (b) => b.name.toLowerCase() === ref.book.toLowerCase()
+    );
+    return {
+      kind: 'reference',
+      ref,
+      suggestions: matched ? [matched] : [],
+    };
+  }
+
+  // Check if input is a book prefix (letters / leading book number like "1 jo" or "ex")
+  const looksLikeBookTyping = /^[1-3]?\s*[a-zA-Z.\s]+$/.test(trimmed);
+  if (looksLikeBookTyping) {
+    const suggestions = suggestBibleBooks(trimmed);
+    if (suggestions.length > 0) {
+      const normalized = trimmed.toLowerCase().replace(/\s+/g, ' ');
+      const exactBook = suggestions.find(
+        (b) =>
+          b.name.toLowerCase() === normalized ||
+          b.aliases.includes(normalized)
+      );
+      return {
+        kind: 'book-prefix',
+        bookQuery: trimmed,
+        suggestions,
+        exactBook,
+      };
+    }
+  }
+
+  return {
+    kind: 'keyword',
+    keyword: trimmed,
+  };
+}
+
+const CANONICAL_BOOK_NUMBER_MAP = new Map<string, number>(
+  BIBLE_BOOKS_66.map((b) => [b.name.toLowerCase(), b.number])
+);
+
+/**
+ * Sorts an array of Bible verses into continuous canonical order
+ * (Genesis 1:1 through Revelation 22:21).
+ */
+export function sortVersesCanonically(verses: BibleVerse[]): BibleVerse[] {
+  return [...verses].sort((a, b) => {
+    const numA =
+      CANONICAL_BOOK_NUMBER_MAP.get(a.book.toLowerCase()) ??
+      CANONICAL_BOOK_NUMBER_MAP.get(resolveBookName(a.book).toLowerCase()) ??
+      999;
+    const numB =
+      CANONICAL_BOOK_NUMBER_MAP.get(b.book.toLowerCase()) ??
+      CANONICAL_BOOK_NUMBER_MAP.get(resolveBookName(b.book).toLowerCase()) ??
+      999;
+    if (numA !== numB) return numA - numB;
+    if (a.chapter !== b.chapter) return a.chapter - b.chapter;
+    return a.verse - b.verse;
+  });
 }
 
 export interface BibleParseResult {

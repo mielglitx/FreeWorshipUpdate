@@ -1123,28 +1123,21 @@ export const HowToUseModal: React.FC<HowToUseModalProps> = ({
                   <div className="p-3 rounded-lg bg-booth-900 border border-booth-800">
                     <div className="font-bold text-amber-300">Step 1: Connect Both Devices to the Same Wi-Fi</div>
                     <p className="text-slate-300 mt-0.5">
-                      Connect both your Windows PC and Android device to the <strong>same Wi-Fi network</strong> (or connect the PC to the Android phone&apos;s Wi-Fi Hotspot). Turn off VPNs on the phone.
+                      Connect your Windows PC and your Apple iPhone/iPad or Android device to the <strong>same Wi-Fi network</strong> (or phone Hotspot). Turn off VPNs on the mobile device.
                     </p>
                   </div>
 
                   <div className="p-3 rounded-lg bg-booth-900 border border-booth-800">
-                    <div className="font-bold text-emerald-300">Step 2: Install the Android APK via QR Code</div>
+                    <div className="font-bold text-sky-300">Apple iPhone / iPad &amp; Browser Users (No App Install)</div>
                     <p className="text-slate-300 mt-0.5">
-                      Click <strong>Android APK</strong> in the top-right bar of FreeWorship Studio. Scan the <strong>QR code</strong> with your Android phone camera to download &amp; install directly over Wi-Fi (or click <strong>Download APK Installer</strong> to save the file).
+                      Click <strong>Mobile / QR</strong> in the top-right bar and scan the <strong>Apple / Web Remote QR Code</strong> with your iPhone Camera. It opens the live controller &amp; 3rd monitor hosted directly on your PC&apos;s local web server in Safari (tap <em>Share &gt; Add to Home Screen</em> for fullscreen mode).
                     </p>
                   </div>
 
                   <div className="p-3 rounded-lg bg-booth-900 border border-booth-800">
-                    <div className="font-bold text-sky-300">Step 3: Auto-Discover Using &ldquo;Scan PC&rdquo;</div>
+                    <div className="font-bold text-emerald-300">Android App Users: Install APK &amp; Tap &ldquo;Scan PC&rdquo;</div>
                     <p className="text-slate-300 mt-0.5">
-                      Keep FreeWorship Studio open on Windows, open <strong>FreeWorship 3rd Monitor</strong> on Android, and tap <strong>Scan PC</strong>. Both PC and Android will pop up a green connection confirmation once synced.
-                    </p>
-                  </div>
-
-                  <div className="p-3 rounded-lg bg-booth-900 border border-booth-800">
-                    <div className="font-bold text-white">Step 4: Manual Connection (Optional Backup)</div>
-                    <p className="text-slate-300 mt-0.5">
-                      Type the PC&apos;s local IP shown in the Android APK hub (e.g. <code>192.168.1.50:5174</code>) into the <strong>PC IP</strong> box on Android and tap <strong>Connect</strong>.
+                      Scan the <strong>Android APK QR code</strong> (or click <strong>Download APK</strong>) to install <code>FreeWorship-StageController.apk</code>, open the app, and tap <strong>Scan PC</strong> to auto-connect—or type the IP shown in the hub (e.g. <code>192.168.1.50:5174</code>) manually.
                     </p>
                   </div>
                 </div>

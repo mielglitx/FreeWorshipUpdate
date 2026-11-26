@@ -41,14 +41,29 @@ function freeworshipLanBridgePlugin(): Plugin {
     name: 'freeworship-lan-bridge',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
+        const cleanPath = (req.url || '/').split('?')[0].toLowerCase().replace(/\/+$/, '') || '/';
+        if (
+          req.method === 'GET' &&
+          (cleanPath === '/remote' ||
+            cleanPath === '/apple' ||
+            cleanPath === '/ios' ||
+            cleanPath === '/controller' ||
+            cleanPath === '/stage')
+        ) {
+          res.statusCode = 302;
+          res.setHeader('Location', '/?view=android');
+          res.end();
+          return;
+        }
         if (!req.url?.startsWith('/api/lan-') && req.url !== '/ping' && req.url !== '/health') {
           return next();
         }
 
-        // CORS headers so the standalone Android APK can connect from any local Wi-Fi IP
+        // CORS & Private Network Access headers so Android APK and mobile/desktop browsers connect cleanly
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', '*');
+        res.setHeader('Access-Control-Allow-Private-Network', 'true');
         res.setHeader('Access-Control-Max-Age', '86400');
 
         if (req.method === 'OPTIONS') {
