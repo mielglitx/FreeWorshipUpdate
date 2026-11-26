@@ -237,7 +237,7 @@ export const LanRemoteModal: React.FC<LanRemoteModalProps> = ({ isOpen, onClose 
           )}
 
           {/* Dual QR Access Cards: Apple / Browser Remote + Android APK Installer */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div data-tour="modal-dual-qr" className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {/* Apple / Web Browser Remote QR Card */}
             <div className="bg-gradient-to-br from-sky-950/60 via-booth-950 to-indigo-950/40 border-2 border-sky-500/45 rounded-xl p-3.5 flex flex-col justify-between gap-2.5">
               <div className="space-y-1">
@@ -463,6 +463,7 @@ export const LanRemoteModal: React.FC<LanRemoteModalProps> = ({ isOpen, onClose 
 
           {/* Windows Firewall & Network Notice */}
           <div
+            data-tour="modal-firewall-panel"
             className={`rounded-xl p-4 space-y-2.5 border transition ${
               isFirewallAllowed
                 ? 'bg-emerald-950/25 border-emerald-500/50'

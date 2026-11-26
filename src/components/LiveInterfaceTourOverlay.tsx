@@ -53,11 +53,11 @@ export const PC_LIVE_TOUR_STEPS: Omit<LiveTourStep, 'onEnter'>[] = [
   {
     id: 'pc-04',
     selector: '[data-tour="pc-android-btn"]',
-    title: '4. Android APK, QR Code & Wi-Fi Sync Hub',
+    title: '4. Mobile / QR Hub (Apple Safari & Android APK)',
     description:
-      'Click "Android APK" to scan the QR code from your Android phone camera to download the app over Wi-Fi, view your PC IP address, or allow Windows Firewall ports.',
+      'Click "Mobile / QR" to scan the Apple Web Remote QR in Safari or download the Android APK over Wi-Fi, view your PC IP address, and configure Windows Firewall.',
     audioUrl: './tour-audio/pc-04.mp3',
-    tip: 'Shows a green counter badge whenever your Android device connects',
+    tip: 'Shows a green counter badge whenever mobile or web devices connect',
   },
   {
     id: 'pc-05',
@@ -154,11 +154,286 @@ export const ANDROID_LIVE_TOUR_STEPS: Omit<LiveTourStep, 'onEnter'>[] = [
       'Jump directly to any slide, switch Schedule items, or open the "Song / Bible" tab to search/create songs and pick Bible verses to add to the PC Schedule or Go Live!',
     audioUrl: './tour-audio/and-05.mp3',
   },
+  {
+    id: 'and-06',
+    selector: '[data-tour="and-browser-permissions"]',
+    title: '6. Keep Screen Awake & Safari Permissions',
+    description:
+      'In Apple Safari or web browsers, tap "Permissions" to verify Local Network access and tap "Keep Screen Awake" so your stage monitor never dims during worship.',
+    audioUrl: './tour-audio/and-06.mp3',
+    tip: 'iOS: Settings > Privacy & Security > Local Network > Safari = ON',
+  },
+];
+
+export type PcTourTopicId =
+  | 'essentials'
+  | 'display-boundary'
+  | 'bible-lookup'
+  | 'songs-pptx'
+  | 'media-logo'
+  | 'audio-pads'
+  | 'layout-alerts'
+  | 'mobile-apple-qr';
+
+export interface PcTourTopicDefinition {
+  id: PcTourTopicId;
+  shortLabel: string;
+  title: string;
+  badge: string;
+  description: string;
+  steps: Omit<LiveTourStep, 'onEnter'>[];
+}
+
+export const PC_TOUR_TOPICS: PcTourTopicDefinition[] = [
+  {
+    id: 'essentials',
+    shortLabel: 'Console Essentials',
+    title: 'Core Console Tour (10 Steps)',
+    badge: 'Start Here',
+    description: 'Top menus, Panic deck, 2nd Screen, Library, Preview vs Live, and Service Schedule.',
+    steps: PC_LIVE_TOUR_STEPS,
+  },
+  {
+    id: 'display-boundary',
+    shortLabel: '1. Displays & Boundaries',
+    title: 'Multi-Display & Text Boundary Designer',
+    badge: 'Screens',
+    description: 'Assign Projector (Screen 2) & Stage Monitor (Screen 3) and drag the 16:9 safe box.',
+    steps: [
+      {
+        id: 'disp-01',
+        selector: '[data-tour="pc-display-settings-btn"]',
+        title: '1. Open Display Routing & Boundary Studio',
+        description:
+          'Click the sliders icon in the top-right bar (or Output > Display & Boundary Settings) to configure your physical monitors and text safe area.',
+        audioUrl: './tour-audio/disp-01.mp3',
+      },
+      {
+        id: 'disp-02',
+        selector: '[data-tour="modal-display-routing"]',
+        title: '2. Assign Projector & Stage Displays',
+        description:
+          'Click Detect Displays to map Screen 1 Operator, Screen 2 Projector, and Screen 3 Stage Monitor, or toggle Desktop 3rd Screen ON/OFF.',
+        audioUrl: './tour-audio/disp-02.mp3',
+        tip: 'Turn Desktop 3rd Screen OFF if using Android/iPhone instead of a wired monitor',
+      },
+      {
+        id: 'disp-03',
+        selector: '[data-tour="modal-text-boundary"]',
+        title: '3. Drag & Resize 16:9 Text Boundary Box',
+        description:
+          'Switch to Text Boundary & Fonts to drag or resize the yellow safe-area rectangle directly on the 16:9 stage canvas and customize fonts and shadows.',
+        audioUrl: './tour-audio/disp-03.mp3',
+      },
+    ],
+  },
+  {
+    id: 'bible-lookup',
+    shortLabel: '2. Continuous Bible',
+    title: 'Unified Bible Lookup & Offline 66 Books',
+    badge: 'Bible',
+    description: 'Type "e" for OT/NT suggestions, jump cleanly to any verse, and scroll 66 books continuously.',
+    steps: [
+      {
+        id: 'bib-01',
+        selector: '[data-tour="pc-bible-manager"]',
+        title: '1. Pre-Bundled 66-Book Offline Bibles',
+        description:
+          'Manage built-in offline translations (KJV, NIV, NASB, ESV, MBB 1901) or import your own JSON/XML Bible files with zero internet needed.',
+        audioUrl: './tour-audio/bib-01.mp3',
+      },
+      {
+        id: 'bib-02',
+        selector: '[data-tour="bible-lookup-bar"]',
+        title: '2. Single Smart Bible Search Bar',
+        description:
+          'Type a letter like "e" to see Exodus through Ephesians ordered Old Testament to New Testament, or type "John 3:16" to jump right to the verse.',
+        audioUrl: './tour-audio/bib-02.mp3',
+        tip: 'Try: "e" -> Exodus..Ephesians • "John 3:16" -> Jump & Highlight',
+      },
+      {
+        id: 'bib-03',
+        selector: '[data-tour="pc-song-list"]',
+        title: '3. Highlighted Context in Continuous Scroll',
+        description:
+          'Searched verses stay inside the seamless 66-book scroll list with preceding and following verses still visible. Select verses to + Schedule or Go Live.',
+        audioUrl: './tour-audio/bib-03.mp3',
+        tip: 'Click = Select • Shift+Click = Multi-Verse Range • Double-click = Go Live',
+      },
+    ],
+  },
+  {
+    id: 'songs-pptx',
+    shortLabel: '3. Songs & .PPTX',
+    title: 'Song Authoring, Import & PowerPoint Export',
+    badge: 'Songs/PPTX',
+    description: 'Create chorded songs, import .PPTX/.XML/.TXT decks, and export schedules to .PPTX.',
+    steps: [
+      {
+        id: 'song-01',
+        selector: '[data-tour="pc-song-new-btn"]',
+        title: '1. Create Custom Songs with Chords',
+        description:
+          'Click + New to write worship songs using [Verse] and [Chorus] section tags plus inline chord brackets like [G] or [Em].',
+        audioUrl: './tour-audio/song-01.mp3',
+      },
+      {
+        id: 'song-02',
+        selector: '[data-tour="pc-song-io-bar"]',
+        title: '2. Import Songs & PowerPoint (.PPTX)',
+        description:
+          'Import songs from JSON, OpenLyrics XML, ChordPro, or TXT, or click Import .PPTX to load announcement or sermon PowerPoint decks into Schedule.',
+        audioUrl: './tour-audio/song-02.mp3',
+      },
+      {
+        id: 'song-03',
+        selector: '[data-tour="pc-schedule-actions"]',
+        title: '3. Save Schedules & Export as PowerPoint (.PPTX)',
+        description:
+          'Save or load offline .fws.json schedules anytime, or click Export .PPTX (or .PPTX on any song card) to generate widescreen PowerPoint decks.',
+        audioUrl: './tour-audio/song-03.mp3',
+      },
+    ],
+  },
+  {
+    id: 'media-logo',
+    shortLabel: '4. Media & Logo',
+    title: 'Motion Backgrounds & Custom Church Logo',
+    badge: 'Visuals',
+    description: 'Upload MP4/WebM motion loops, assign defaults, and upload custom [L] Logo branding.',
+    steps: [
+      {
+        id: 'med-01',
+        selector: '[data-tour="pc-media-import-btn"]',
+        title: '1. Import Custom Photos & Motion Loops',
+        description:
+          'Click Import Media in the Media tab to bring in church photography or looping MP4 / WebM worship video backgrounds.',
+        audioUrl: './tour-audio/med-01.mp3',
+      },
+      {
+        id: 'med-02',
+        selector: '[data-tour="pc-media-grid"]',
+        title: '2. Assign Active & Default Backgrounds',
+        description:
+          'Click any background to apply it now, click the Star to choose your default Logo screen, or right-click to set Song vs Scripture default loops.',
+        audioUrl: './tour-audio/med-02.mp3',
+      },
+      {
+        id: 'med-03',
+        selector: '[data-tour="pc-themes-logo"]',
+        title: '3. Upload Custom Church Logo ([L] Key)',
+        description:
+          'At the bottom of the Themes tab, upload a transparent PNG/SVG logo so pressing [L] displays your custom church emblem cleanly.',
+        audioUrl: './tour-audio/med-03.mp3',
+      },
+    ],
+  },
+  {
+    id: 'audio-pads',
+    shortLabel: '5. Worship Pads & Audio',
+    title: 'Ambient Worship Pads & Backing Tracks',
+    badge: 'Audio',
+    description: 'Trigger 12-key cathedral shimmer pads and fade pre-service audio smoothly.',
+    steps: [
+      {
+        id: 'aud-01',
+        selector: '[data-tour="pc-audio-pads"]',
+        title: '1. 12-Key Cathedral Ambient Worship Pads',
+        description:
+          'Tap any musical key to trigger lush stereo synth pads for prayer or transitions, with smooth 2.2s crossfades and automatic song-key following.',
+        audioUrl: './tour-audio/aud-01.mp3',
+      },
+      {
+        id: 'aud-02',
+        selector: '[data-tour="pc-audio-player"]',
+        title: '2. Multi-Track Audio Player & Booth Fade Out',
+        description:
+          'Load pre-service MP3/WAV tracks or click Fade Out to gently bring backing music down over 3 seconds before worship starts.',
+        audioUrl: './tour-audio/aud-02.mp3',
+      },
+    ],
+  },
+  {
+    id: 'layout-alerts',
+    shortLabel: '6. Layout, Slides & Alerts',
+    title: 'Workspace Layouts, Quick Slide & Stage Alerts',
+    badge: 'Workflow',
+    description: 'Use Split/Live/Preview modes, transitions, Quick Slide, timers, and nursery alerts.',
+    steps: [
+      {
+        id: 'deck-01',
+        selector: '[data-tour="pc-layout-switcher"]',
+        title: '1. Split, Live & Preview Layouts',
+        description:
+          'Switch between Side-by-Side Split view (Preview on left, Live on right), Live Only, or Preview Only right from the top-right bar.',
+        audioUrl: './tour-audio/deck-01.mp3',
+      },
+      {
+        id: 'deck-02',
+        selector: '[data-tour="pc-view-transition"]',
+        title: '2. Slide Transitions & Grid / List Views',
+        description:
+          'Pick Crossfade, Slide Up, Scale Zoom, or 3D Flip animations with speed control, and switch between Grid cards and compact List rows.',
+        audioUrl: './tour-audio/deck-02.mp3',
+      },
+      {
+        id: 'deck-03',
+        selector: '[data-tour="pc-quick-slide-btn"]',
+        title: '3. Spontaneous + Quick Slide',
+        description:
+          'Click + Quick Slide mid-service to type an instant chorus repeat, scripture cue, or announcement slide on the spot.',
+        audioUrl: './tour-audio/deck-03.mp3',
+      },
+      {
+        id: 'deck-04',
+        selector: '[data-tour="pc-stage-alerts"]',
+        title: '4. Stage Countdown & Private / Projector Alerts',
+        description:
+          'Run countdown presets (5m, 10m, 30m) and send messages quietly to singers with Send to Stage Only, or visibly with Projector Banner.',
+        audioUrl: './tour-audio/deck-04.mp3',
+      },
+    ],
+  },
+  {
+    id: 'mobile-apple-qr',
+    shortLabel: '7. Apple QR & Android Sync',
+    title: 'Apple Safari Web Remote, Android APK & Permissions',
+    badge: 'Mobile/Wi-Fi',
+    description: 'Scan Apple or Android QR codes, unblock Windows Firewall, and keep mobile awake.',
+    steps: [
+      {
+        id: 'mob-01',
+        selector: '[data-tour="pc-android-btn"]',
+        title: '1. Open Mobile / QR Remote Hub',
+        description:
+          'Click Mobile / QR in the header anytime to open your PC LAN server info, dual QR codes, and connected remote device count.',
+        audioUrl: './tour-audio/mob-01.mp3',
+      },
+      {
+        id: 'mob-02',
+        selector: '[data-tour="modal-dual-qr"]',
+        title: '2. Apple / Browser QR & Android APK QR',
+        description:
+          'iPhone/iPad/Mac users scan the blue Apple QR to open the live Safari Web Remote served by this PC; Android users scan the green QR to install the APK.',
+        audioUrl: './tour-audio/mob-02.mp3',
+        tip: 'Apple iOS: Allow Local Network access in Safari & tap Keep Screen Awake',
+      },
+      {
+        id: 'mob-03',
+        selector: '[data-tour="modal-firewall-panel"]',
+        title: '3. Windows Firewall Permission Check',
+        description:
+          'Confirm this panel shows green Already Allowed (or click Allow Port in Windows Firewall and accept the Admin prompt) so mobile browsers connect reliably.',
+        audioUrl: './tour-audio/mob-03.mp3',
+      },
+    ],
+  },
 ];
 
 interface LiveInterfaceTourOverlayProps {
   isOpen: boolean;
   steps: LiveTourStep[];
+  tourTitle?: string;
   onClose: () => void;
   onOpenWrittenGuide?: () => void;
 }
@@ -173,6 +448,7 @@ interface SpotlightRect {
 export const LiveInterfaceTourOverlay: React.FC<LiveInterfaceTourOverlayProps> = ({
   isOpen,
   steps,
+  tourTitle,
   onClose,
   onOpenWrittenGuide,
 }) => {
@@ -204,7 +480,7 @@ export const LiveInterfaceTourOverlay: React.FC<LiveInterfaceTourOverlayProps> =
     setIsSpeaking(false);
   };
 
-  // Reset to step 0 when opened
+  // Reset to step 0 when opened or tour topic changes
   useEffect(() => {
     if (isOpen) {
       setStepIdx(0);
@@ -213,7 +489,7 @@ export const LiveInterfaceTourOverlay: React.FC<LiveInterfaceTourOverlayProps> =
       stopAudioAndTimers();
     }
     return () => stopAudioAndTimers();
-  }, [isOpen]);
+  }, [isOpen, steps]);
 
   // Trigger optional UI preparation hook (e.g. switch layout to show target panel) & measure target rect
   useEffect(() => {
@@ -427,9 +703,9 @@ export const LiveInterfaceTourOverlay: React.FC<LiveInterfaceTourOverlayProps> =
       >
         {/* Top Metadata Row */}
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 bg-amber-500 text-slate-950 font-black text-[10px] uppercase tracking-wider">
-              Step {stepIdx + 1} / {steps.length}
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="px-2 py-0.5 bg-amber-500 text-slate-950 font-black text-[10px] uppercase tracking-wider shrink-0">
+              {tourTitle ? `${tourTitle} • ` : ''}Step {stepIdx + 1} / {steps.length}
             </span>
             {isSpeaking && (
               <span className="px-2 py-0.5 bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 font-bold text-[10px] flex items-center gap-1 animate-pulse">

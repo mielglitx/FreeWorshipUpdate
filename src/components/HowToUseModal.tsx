@@ -26,12 +26,13 @@ import {
   Wifi,
   X,
 } from 'lucide-react';
+import { PC_TOUR_TOPICS, PcTourTopicId } from './LiveInterfaceTourOverlay';
 
 interface HowToUseModalProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenAndroidSetup?: () => void;
-  onStartLiveTour?: () => void;
+  onStartLiveTour?: (topicId?: PcTourTopicId) => void;
   platform?: 'pc' | 'android';
 }
 
@@ -208,7 +209,7 @@ export const HowToUseModal: React.FC<HowToUseModalProps> = ({
             {onStartLiveTour && (
               <button
                 type="button"
-                onClick={onStartLiveTour}
+                onClick={() => onStartLiveTour('essentials')}
                 className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow transition"
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
@@ -286,6 +287,45 @@ export const HowToUseModal: React.FC<HowToUseModalProps> = ({
           {/* ================= TAB 1: ANIMATED INTERACTIVE VISUAL TOUR ================= */}
           {activeTab === 'tour' && (
             <div className="space-y-3.5">
+              {/* Live On-Interface Topic Tour Launcher (PC Desktop) */}
+              {onStartLiveTour && platform === 'pc' && (
+                <div className="bg-gradient-to-br from-emerald-950/50 via-booth-950 to-sky-950/35 border border-emerald-500/40 rounded-xl p-3 space-y-2.5">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div>
+                      <div className="text-[11px] font-black uppercase tracking-wider text-emerald-300 flex items-center gap-1.5">
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>Live On-Interface Voice Tours (Choose a Topic)</span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 mt-0.5">
+                        Spotlights real buttons, opens tabs/modals automatically, and narrates step by step.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                    {PC_TOUR_TOPICS.map((topic) => (
+                      <button
+                        key={topic.id}
+                        type="button"
+                        onClick={() => onStartLiveTour(topic.id)}
+                        className="p-2.5 rounded-lg bg-booth-900/90 hover:bg-booth-800 border border-booth-700 hover:border-amber-400/80 text-left flex flex-col justify-between gap-1.5 transition group"
+                      >
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[11px] font-black text-white group-hover:text-amber-300 leading-tight">
+                            {topic.shortLabel}
+                          </span>
+                          <span className="px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[9px] font-black uppercase shrink-0">
+                            {topic.steps.length}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 leading-snug line-clamp-2">
+                          {topic.description}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Scene Selector Pills + Playback Controls */}
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-1.5 flex-wrap">

@@ -126,6 +126,9 @@ export const DisplaySettingsModal: React.FC<DisplaySettingsModalProps> = ({
   onClose,
 }) => {
   const [tab, setTab] = useState<'screens' | 'text-boundary'>(initialTab);
+  useEffect(() => {
+    setTab(initialTab);
+  }, [initialTab]);
   const [displays, setDisplays] = useState<HardwareDisplayInfo[]>([]);
   const [isDetecting, setIsDetecting] = useState<boolean>(false);
   const [testSlideToggle, setTestSlideToggle] = useState<boolean>(false);
@@ -382,7 +385,10 @@ export const DisplaySettingsModal: React.FC<DisplaySettingsModalProps> = ({
         {tab === 'screens' && (
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             {/* Visual Multi-Monitor Topology Map */}
-            <div className="bg-booth-950 border border-booth-800 rounded-2xl p-5 space-y-4">
+            <div
+              data-tour="modal-display-routing"
+              className="bg-booth-950 border border-booth-800 rounded-2xl p-5 space-y-4"
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-xs font-black uppercase tracking-wider text-amber-400">
@@ -1826,7 +1832,10 @@ export const DisplaySettingsModal: React.FC<DisplaySettingsModalProps> = ({
             </div>
 
             {/* RIGHT 5 COLS: Interactive Drag & Resize 16:9 Boundary Stage Canvas */}
-            <div className="col-span-5 bg-booth-950 p-5 flex flex-col justify-between">
+            <div
+              data-tour="modal-text-boundary"
+              className="col-span-5 bg-booth-950 p-5 flex flex-col justify-between"
+            >
               <div className="space-y-3">
                 <div>
                   <div className="flex items-center justify-between">

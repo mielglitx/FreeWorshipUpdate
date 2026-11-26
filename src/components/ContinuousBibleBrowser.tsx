@@ -524,7 +524,11 @@ export const ContinuousBibleBrowser: React.FC<ContinuousBibleBrowserProps> = ({
   return (
     <div className="flex-1 flex flex-col min-h-0 gap-2">
       {/* Unified Translation + Single Bible Lookup Bar */}
-      <div ref={dropdownWrapperRef} className="relative z-30 flex items-center gap-1.5">
+      <div
+        ref={dropdownWrapperRef}
+        data-tour="bible-lookup-bar"
+        className="relative z-30 flex items-center gap-1.5"
+      >
         <select
           value={selectedTranslation}
           onChange={(e) => onSelectTranslation(e.target.value)}

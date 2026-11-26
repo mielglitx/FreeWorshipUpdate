@@ -119,7 +119,8 @@ import { HowToUseModal } from './components/HowToUseModal';
 import {
   LiveInterfaceTourOverlay,
   LiveTourStep,
-  PC_LIVE_TOUR_STEPS,
+  PC_TOUR_TOPICS,
+  PcTourTopicId,
 } from './components/LiveInterfaceTourOverlay';
 import { APP_LOGO } from './assets/logo';
 import {
@@ -382,7 +383,7 @@ const OperatorConsole: React.FC = () => {
   // Keyboard Shortcuts Help Popover & Import/Export Data Studio Modal
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [showHowToUseModal, setShowHowToUseModal] = useState(false);
-  const [showLiveTour, setShowLiveTour] = useState(false);
+  const [activeTourTopic, setActiveTourTopic] = useState<PcTourTopicId | null>(null);
   const [importExportModalOpen, setImportExportModalOpen] = useState(false);
   const [lanRemoteModalOpen, setLanRemoteModalOpen] = useState(false);
   const [headerLanIp, setHeaderLanIp] = useState<string>('');
@@ -2088,6 +2089,7 @@ const OperatorConsole: React.FC = () => {
 
         <div className="flex items-center gap-1.5 shrink-0">
           <button
+            data-tour="pc-quick-slide-btn"
             onClick={() => setShowQuickSlideModal(true)}
             disabled={!activeItem}
             className="px-2.5 py-1.5 rounded-lg bg-booth-800 hover:bg-booth-700 text-xs font-bold text-amber-300 border border-booth-700 flex items-center gap-1 disabled:opacity-40"
@@ -2143,7 +2145,10 @@ const OperatorConsole: React.FC = () => {
           })}
         </div>
 
-        <div className="flex items-center gap-1.5 bg-booth-950 px-2 py-1 rounded-lg border border-booth-800 flex-wrap">
+        <div
+          data-tour="pc-view-transition"
+          className="flex items-center gap-1.5 bg-booth-950 px-2 py-1 rounded-lg border border-booth-800 flex-wrap"
+        >
           <span className="text-[10px] font-bold uppercase tracking-wider text-sky-400">
             Transition:
           </span>
@@ -3425,7 +3430,7 @@ const OperatorConsole: React.FC = () => {
                       setOpenTopMenu(null);
                       setCenterLayoutMode('side-by-side');
                       setLeftTab('songs');
-                      setShowLiveTour(true);
+                      setActiveTourTopic('essentials');
                     }}
                     className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-emerald-500/20 hover:text-emerald-300 text-left transition group font-bold"
                   >
@@ -3445,7 +3450,7 @@ const OperatorConsole: React.FC = () => {
                   >
                     <span className="flex items-center gap-2">
                       <BookOpen className="w-3.5 h-3.5 text-sky-400" />
-                      <span>Written User Guide &amp; Diagrams...</span>
+                      <span>Topic Live Tours &amp; Written Guide...</span>
                     </span>
                   </button>
 
@@ -3631,7 +3636,10 @@ const OperatorConsole: React.FC = () => {
           <div className="h-4 w-px bg-booth-800 mx-0.5" />
 
           {/* Layout Controls (VS Code Style) */}
-          <div className="flex items-center bg-booth-900 rounded p-0.5 border border-booth-800">
+          <div
+            data-tour="pc-layout-switcher"
+            className="flex items-center bg-booth-900 rounded p-0.5 border border-booth-800"
+          >
             <button
               type="button"
               onClick={() => setCenterLayoutMode('side-by-side')}
@@ -3677,6 +3685,7 @@ const OperatorConsole: React.FC = () => {
 
           {/* Display & Text Boundary Settings Modal */}
           <button
+            data-tour="pc-display-settings-btn"
             type="button"
             onClick={() => {
               setDisplaySettingsTab('screens');
@@ -3785,6 +3794,7 @@ const OperatorConsole: React.FC = () => {
                   />
                 </div>
                 <button
+                  data-tour="pc-song-new-btn"
                   onClick={() => {
                     setEditingSong(null);
                     setSongModalOpen(true);
@@ -3797,7 +3807,7 @@ const OperatorConsole: React.FC = () => {
               </div>
 
               {/* Import & Export Bar: Songs JSON / OpenLyrics XML / ChordPro + PowerPoint (.pptx) */}
-              <div className="grid grid-cols-3 gap-1.5">
+              <div data-tour="pc-song-io-bar" className="grid grid-cols-3 gap-1.5">
                 <button
                   onClick={() => songImportInputRef.current?.click()}
                   className="py-1.5 px-2 rounded-lg bg-booth-950 hover:bg-booth-850 border border-booth-700 text-[10px] font-bold text-sky-300 flex items-center justify-center gap-1"
@@ -3996,7 +4006,10 @@ const OperatorConsole: React.FC = () => {
           {leftTab === 'scripture' && (
             <div className="flex-1 flex flex-col min-h-0 p-3 gap-2.5">
               {/* Offline Bible JSON/XML Import & 1-Click 66-Book Installer */}
-              <div className="bg-booth-950 border border-booth-800 rounded-xl p-2.5 space-y-2">
+              <div
+                data-tour="pc-bible-manager"
+                className="bg-booth-950 border border-booth-800 rounded-xl p-2.5 space-y-2"
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-black uppercase tracking-wider text-amber-400">
                     Offline 66-Book Bible Manager
@@ -4109,6 +4122,7 @@ const OperatorConsole: React.FC = () => {
                   className="hidden"
                 />
                 <button
+                  data-tour="pc-media-import-btn"
                   onClick={() => fileInputRef.current?.click()}
                   className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs flex items-center gap-1.5"
                 >
@@ -4142,7 +4156,7 @@ const OperatorConsole: React.FC = () => {
                 </div>
               )}
 
-              <div className="flex-1 overflow-y-auto grid grid-cols-2 gap-2.5 pr-1">
+              <div data-tour="pc-media-grid" className="flex-1 overflow-y-auto grid grid-cols-2 gap-2.5 pr-1">
                 {mediaPool.map((asset, idx) => {
                   const isSelected = activeBackground.id === asset.id;
                   const isMultiSelected = selectedMediaIds.includes(asset.id);
@@ -4445,7 +4459,7 @@ const OperatorConsole: React.FC = () => {
               </div>
 
               {/* Organization Logo Customization */}
-              <div className="mt-2 pt-3 border-t border-booth-800 space-y-3">
+              <div data-tour="pc-themes-logo" className="mt-2 pt-3 border-t border-booth-800 space-y-3">
                 <div className="flex items-center justify-between">
                   <h5 className="text-xs font-bold uppercase tracking-wider text-amber-400">
                     Sanctuary Logo & Splash Screen ([L] Key)
@@ -4848,7 +4862,7 @@ const OperatorConsole: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-1.5">
+            <div data-tour="pc-schedule-actions" className="grid grid-cols-3 gap-1.5">
               <button
                 onClick={() => scheduleJsonImportInputRef.current?.click()}
                 className="py-1 px-2 rounded-lg bg-booth-900 hover:bg-booth-800 border border-booth-700 text-[10px] font-bold text-sky-300 flex items-center justify-center gap-1 shadow-sm transition active:scale-95"
@@ -4990,7 +5004,10 @@ const OperatorConsole: React.FC = () => {
         </div>
 
           {/* Stage Display & Confidence Monitor Controls (Timer + Private Band/Speaker Alert) */}
-          <div className="p-3 bg-booth-950 border-t border-booth-800 space-y-3 shrink-0">
+          <div
+            data-tour="pc-stage-alerts"
+            className="p-3 bg-booth-950 border-t border-booth-800 space-y-3 shrink-0"
+          >
             {/* Stage Countdown Timer Control */}
             <div className="bg-booth-900 border border-booth-800 rounded-xl p-2.5">
               <div className="flex items-center justify-between mb-2">
@@ -5423,32 +5440,76 @@ const OperatorConsole: React.FC = () => {
           isOpen={showHowToUseModal}
           onClose={() => setShowHowToUseModal(false)}
           onOpenAndroidSetup={() => setLanRemoteModalOpen(true)}
-          onStartLiveTour={() => {
+          onStartLiveTour={(topicId = 'essentials') => {
             setShowHowToUseModal(false);
             setCenterLayoutMode('side-by-side');
-            setLeftTab('songs');
-            setShowLiveTour(true);
+            setActiveTourTopic(topicId);
           }}
         />
       )}
 
-      {showLiveTour && (
-        <LiveInterfaceTourOverlay
-          isOpen={showLiveTour}
-          steps={PC_LIVE_TOUR_STEPS.map((st): LiveTourStep => ({
-            ...st,
-            onEnter: () => {
-              if (st.id === 'pc-05' || st.id === 'pc-06') {
-                setLeftTab('songs');
-              } else if (st.id === 'pc-07' || st.id === 'pc-08') {
-                setCenterLayoutMode('side-by-side');
-              }
-            },
-          }))}
-          onClose={() => setShowLiveTour(false)}
-          onOpenWrittenGuide={() => setShowHowToUseModal(true)}
-        />
-      )}
+      {activeTourTopic && (() => {
+        const topicDef =
+          PC_TOUR_TOPICS.find((t) => t.id === activeTourTopic) || PC_TOUR_TOPICS[0];
+        const prepareTourStep = (stepId: string) => {
+          // Close unrelated modals cleanly before switching target
+          if (!stepId.startsWith('disp-') || stepId === 'disp-01') {
+            setDisplaySettingsOpen(false);
+          }
+          if (!stepId.startsWith('mob-') || stepId === 'mob-01') {
+            setLanRemoteModalOpen(false);
+          }
+
+          if (stepId === 'pc-05' || stepId === 'pc-06' || stepId.startsWith('song-')) {
+            setLeftTab('songs');
+          } else if (stepId.startsWith('bib-')) {
+            setLeftTab('scripture');
+          } else if (stepId === 'med-01' || stepId === 'med-02') {
+            setLeftTab('media');
+          } else if (stepId === 'med-03') {
+            setLeftTab('themes');
+          } else if (stepId.startsWith('aud-')) {
+            setLeftTab('audio');
+          } else if (stepId === 'disp-02') {
+            setDisplaySettingsTab('screens');
+            setDisplaySettingsOpen(true);
+          } else if (stepId === 'disp-03') {
+            setDisplaySettingsTab('text-boundary');
+            setDisplaySettingsOpen(true);
+          } else if (stepId === 'mob-02' || stepId === 'mob-03') {
+            setLanRemoteModalOpen(true);
+          }
+
+          if (
+            stepId === 'pc-07' ||
+            stepId === 'pc-08' ||
+            stepId.startsWith('deck-')
+          ) {
+            setCenterLayoutMode('side-by-side');
+          }
+        };
+
+        return (
+          <LiveInterfaceTourOverlay
+            isOpen={true}
+            tourTitle={topicDef.shortLabel}
+            steps={topicDef.steps.map((st): LiveTourStep => ({
+              ...st,
+              onEnter: () => prepareTourStep(st.id),
+            }))}
+            onClose={() => {
+              setActiveTourTopic(null);
+              setDisplaySettingsOpen(false);
+              setLanRemoteModalOpen(false);
+            }}
+            onOpenWrittenGuide={() => {
+              setDisplaySettingsOpen(false);
+              setLanRemoteModalOpen(false);
+              setShowHowToUseModal(true);
+            }}
+          />
+        );
+      })()}
 
       {/* Windows PC Android 3rd Monitor Connection Toast Notification */}
       {androidToast && (

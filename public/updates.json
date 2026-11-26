@@ -10,7 +10,7 @@
     "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.9/FreeWorship-Studio-Setup-1.1.9.exe",
     "portableUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases",
     "fileName": "FreeWorship Studio-Setup-1.1.9.exe",
-    "notes": "v1.1.9 update: Apple / Browser Web Remote QR + built-in LAN web server, browser/firewall permissions & Keep Screen Awake, Export as PowerPoint (.pptx), and unified continuous 66-book Bible lookup across PC & mobile."
+    "notes": "v1.1.9 update: Apple / Browser Web Remote QR + built-in LAN web server, browser/firewall permissions & Keep Screen Awake, Export as PowerPoint (.pptx), continuous 66-book Bible lookup, and 7 new voice-guided live topic tours."
   },
   "android": {
     "version": "1.1.9",
@@ -19,19 +19,20 @@
     "downloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.9/FreeWorship-StageController.apk",
     "fallbackDownloadUrl": "https://github.com/mielglitx/FreeWorshipUpdate/raw/main/FreeWorship-StageController.apk",
     "fileName": "FreeWorship-StageController.apk",
-    "notes": "v1.1.9 update: Continuous 66-book Bible lookup with OT-then-NT autocomplete & jump-highlight, unified Add Song / Bible controls, and dynamic client device sync."
+    "notes": "v1.1.9 update: Continuous 66-book Bible lookup with OT-then-NT autocomplete & jump-highlight, unified Add Song / Bible controls, dynamic client sync, and Safari Permissions / Keep Screen Awake tour guide."
   },
   "changelog": [
     {
       "version": "1.1.9",
       "date": "November 26, 2026",
       "platform": "Windows Desktop, Android & Apple Browser",
-      "title": "Apple / Browser Web Remote, PowerPoint (.pptx) Export & Continuous 66-Book Bible Lookup",
+      "title": "Apple / Browser Web Remote, PowerPoint (.pptx) Export, Continuous Bible & Topic Live Tours",
       "highlights": [
         "Apple / Web Browser Remote QR + Built-in LAN Web Server: iPhone, iPad, Mac Safari, and any browser can scan the dedicated Apple / Web QR code to control FreeWorship and view the 3rd Monitor over Wi-Fi while preserving Android APK QR downloads.",
         "Host & Browser Permissions Ready: Proactive Windows Firewall port + app rule check, Chromium Private Network Access headers, iOS Local Network permission checklist, and Keep Screen Awake (Wake Lock).",
         "Export as PowerPoint (.pptx): Export schedules, active decks, songs, or songbooks to 16:9 .pptx files from the File menu, Schedule header, Song cards, and Import/Export Hub.",
-        "Continuous 66-Book Bible Lookup (PC & Mobile): Single text lookup bar with OT-then-NT book autocomplete suggestions, jump-and-highlight navigation keeping surrounding verses visible, and continuous scroll from Genesis to Revelation."
+        "Continuous 66-Book Bible Lookup (PC & Mobile): Single text lookup bar with OT-then-NT book autocomplete suggestions, jump-and-highlight navigation keeping surrounding verses visible, and continuous scroll from Genesis to Revelation.",
+        "7 New Topic Live Tours with Natural Voice-Over: Interactive on-interface spotlight tours covering Displays & Boundaries, Continuous Bible Lookup, Songs & .PPTX Export, Media & Custom Logo, Worship Pads & Audio, Layout & Stage Alerts, and Apple QR / Permissions."
       ]
     },
     {

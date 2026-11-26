@@ -68,6 +68,7 @@ export const APP_CHANGELOG: ChangelogItem[] = [
       'Browser & Host Permissions Ready: Includes proactive Windows Firewall executable + port UAC prompt, Private Network Access headers, iOS Local Network guidance, and Screen Wake Lock ("Keep Screen Awake").',
       'Export as PowerPoint (.pptx): Export complete Service Schedules, active decks, individual songs, or songbooks to 16:9 Microsoft PowerPoint (.pptx) presentations from the File menu, Schedule panel, Song cards, and Import/Export Hub.',
       'Unified Continuous 66-Book Bible Lookup (PC & Mobile): Replaced Book/Chapter dropdowns with a single autocomplete bar showing OT-then-NT book suggestions, jump-and-highlight navigation keeping surrounding verses visible, and continuous scrolling from Genesis to Revelation.',
+      'Expanded Topic Live Tours with Natural Voice-Over: Added 7 interactive spotlight tours with natural studio narration covering Multi-Display & Text Boundaries, Continuous Bible Lookup, Songs & .PPTX Export, Media Loops & Custom Logo, Worship Pads & Audio Player, Workspace Layouts & Stage Alerts, and Apple QR / Permissions.',
     ],
   },
   {

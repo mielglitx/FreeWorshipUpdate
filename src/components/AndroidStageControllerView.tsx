@@ -972,7 +972,10 @@ export const AndroidStageControllerView: React.FC = () => {
             </button>
           </div>
 
-          <div className="flex items-center gap-1.5 ml-auto flex-wrap">
+          <div
+            data-tour="and-browser-permissions"
+            className="flex items-center gap-1.5 ml-auto flex-wrap"
+          >
             {runtimeInfo.isBrowserMode && wakeLockSupported && (
               <button
                 type="button"

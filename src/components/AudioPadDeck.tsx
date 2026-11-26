@@ -170,7 +170,10 @@ export const AudioPadDeck: React.FC<AudioPadDeckProps> = ({
       {/* =====================================================================
           SECTION 1: AMBIENT WORSHIP PAD SYNTHESIZER (12 KEYS + CROSSFADE)
          ===================================================================== */}
-      <div className="bg-booth-950 border border-booth-800 rounded-xl p-3 space-y-3">
+      <div
+        data-tour="pc-audio-pads"
+        className="bg-booth-950 border border-booth-800 rounded-xl p-3 space-y-3"
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Radio className={`w-4 h-4 ${padActiveKey ? 'text-emerald-400 animate-pulse' : 'text-amber-400'}`} />
@@ -282,7 +285,10 @@ export const AudioPadDeck: React.FC<AudioPadDeckProps> = ({
       {/* =====================================================================
           SECTION 2: MULTI-TRACK AUDIO PLAYER (MP3 / WAV / OGG + 3s FADE OUT)
          ===================================================================== */}
-      <div className="bg-booth-950 border border-booth-800 rounded-xl p-3 space-y-3">
+      <div
+        data-tour="pc-audio-player"
+        className="bg-booth-950 border border-booth-800 rounded-xl p-3 space-y-3"
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Music2 className="w-4 h-4 text-sky-400" />

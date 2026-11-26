@@ -20,6 +20,16 @@ All notable changes to the **FreeWorship Studio** (Windows Desktop Presentation 
 - **Jump & Highlight Without Hiding Context**: Typing references like `John 3:16` jumps directly to the verse and highlights it while keeping preceding and proceeding verses visible above and below.
 - **Seamless Virtualized 66-Book Scroll List**: Continuous variable-height scroll from Genesis 1:1 through Revelation 22:21 without stopping at book or chapter walls, plus touchscreen **Select Range** mode on mobile remotes.
 
+### 🎓 Expanded Topic Live Voice Tours (7 New Feature Walkthroughs)
+- Added dedicated live on-interface voice-guided topic tours accessible from **Help > How to Use** (`en-US-AndrewMultilingualNeural` studio narration):
+  1. **Displays & Text Boundaries**: Mapping Physical Monitors 1/2/3 and dragging the 16:9 interactive Text Boundary safe-area box.
+  2. **Continuous Bible Lookup**: Typing OT-then-NT book suggestions, jumping with visible context, and scrolling 66 books offline.
+  3. **Songs & PowerPoint (`.PPTX`)**: Authoring chorded songs, importing `.PPTX`, and exporting Schedules/Songs to `.PPTX`.
+  4. **Media & Custom Church Logo**: Motion video loops, default background stars, and custom `[L]` Logo uploads.
+  5. **Worship Pads & Audio Player**: 12-key ambient shimmer synth and 3-second booth audio fade-out.
+  6. **Layout, Slides & Stage Alerts**: Split/Live/Preview views, slide transitions, `+ Quick Slide`, Countdown, and Stage/Nursery alerts.
+  7. **Apple QR, Android Sync & Permissions**: Dual Apple/Android QR scanning, Windows Firewall setup, and browser `Keep Screen Awake` / Local Network (`and-06`) guide.
+
 ---
 
 ## [1.1.8] — November 25, 2026

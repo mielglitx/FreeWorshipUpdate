@@ -29,7 +29,7 @@ if (!token) {
 const REPO_OWNER = 'mielglitx';
 const REPO_NAME = 'FreeWorshipUpdate';
 const TAG_NAME = 'v1.1.9';
-const RELEASE_TITLE = 'FreeWorship v1.1.9 - Apple / Browser Web Remote, PowerPoint Export & Continuous 66-Book Bible Lookup';
+const RELEASE_TITLE = 'FreeWorship v1.1.9 - Apple / Browser Web Remote, PowerPoint Export, Continuous Bible & Topic Live Tours';
 
 const RELEASE_BODY = `## FreeWorship v1.1.9 Update
 
@@ -38,6 +38,7 @@ const RELEASE_BODY = `## FreeWorship v1.1.9 Update
 - **Host & Browser Permissions**: Proactive Windows Firewall port + app permission check, Chromium Private Network Access headers, iOS Local Network guidance, and Screen Wake Lock (\`Keep Screen Awake\`).
 - **Export as Microsoft PowerPoint (.pptx)**: Export entire Service Schedules, active slide decks, or individual songs to 16:9 \`.pptx\` presentations directly from the File menu, Schedule header, Song cards, and Import/Export Hub.
 - **Unified Continuous 66-Book Bible Lookup (PC & Mobile/Web)**: Single lookup bar with OT-first / NT-second autocomplete suggestions, jump-and-highlight navigation keeping surrounding verses visible, and continuous virtualized scroll from Genesis 1:1 to Revelation 22:21.
+- **7 New Voice-Guided Topic Live Tours**: Interactive on-interface spotlight tours with natural studio narration covering Multi-Display & Text Boundaries, Continuous Bible Lookup, Songs & \`.PPTX\` Export, Media & Custom Church Logo, Worship Pads & Audio Player, Layout/Quick Slide/Stage Alerts, and Apple QR/Permissions.
 
 ### 📥 Direct Downloads
 - **Windows Setup Installer**: [FreeWorship-Studio-Setup-1.1.9.exe](https://github.com/mielglitx/FreeWorshipUpdate/releases/download/v1.1.9/FreeWorship-Studio-Setup-1.1.9.exe)
@@ -135,7 +136,27 @@ async function main() {
 
   if (getRes.status === 200 && getRes.data) {
     release = getRes.data;
-    console.log(`Found existing release: ${release.name} (id: ${release.id})`);
+    console.log(`Found existing release: ${release.name} (id: ${release.id}) — updating metadata...`);
+    const patchRes = await request(
+      {
+        hostname: 'api.github.com',
+        path: `/repos/${REPO_OWNER}/${REPO_NAME}/releases/${release.id}`,
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'User-Agent': 'FreeWorship-Release-Publisher',
+          'Content-Type': 'application/json',
+          Accept: 'application/vnd.github+json',
+        },
+      },
+      {
+        name: RELEASE_TITLE,
+        body: RELEASE_BODY,
+      }
+    );
+    if (patchRes.status >= 200 && patchRes.status < 300 && patchRes.data) {
+      release = patchRes.data;
+    }
   } else {
     console.log(`Creating new release for ${TAG_NAME}...`);
     const createRes = await request(
