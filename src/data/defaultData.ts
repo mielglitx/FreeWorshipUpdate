@@ -1,5 +1,6 @@
 import { SongItem, BibleVerse, MediaAsset, ThemeTemplate, ScheduleItem } from '../types/worship';
 import { APP_LOGO } from '../assets/logo';
+import { CLASSIC_HYMNS_PACK } from './classicHymnsPack';
 
 export const DEFAULT_MEDIA_POOL: MediaAsset[] = [
   {
@@ -56,7 +57,103 @@ export const DEFAULT_MEDIA_POOL: MediaAsset[] = [
     category: 'Motion Loop',
     type: 'motion-canvas',
     motionPreset: 'royal-gold',
+    themeTag: 'Glory',
     previewGradient: 'linear-gradient(135deg, #141106 0%, #3b2d0d 50%, #6b4e16 100%)',
+  },
+  // WORSHIP MOTION LOOPS
+  {
+    id: 'bg-worship-altar',
+    name: 'Worship: Sacred Altar Glow',
+    category: 'Motion Loop',
+    type: 'motion-canvas',
+    motionPreset: 'worship-altar',
+    themeTag: 'Worship',
+    previewGradient: 'linear-gradient(135deg, #160608 0%, #421216 50%, #7c2d12 100%)',
+  },
+  {
+    id: 'bg-worship-river',
+    name: 'Worship: Spirit River Flow',
+    category: 'Motion Loop',
+    type: 'motion-canvas',
+    motionPreset: 'worship-river',
+    themeTag: 'Worship',
+    previewGradient: 'linear-gradient(135deg, #03121c 0%, #0b2f45 50%, #0e7490 100%)',
+  },
+  // PRAISE MOTION LOOPS
+  {
+    id: 'bg-praise-jubilee',
+    name: 'Praise: Jubilee Sunburst',
+    category: 'Motion Loop',
+    type: 'motion-canvas',
+    motionPreset: 'praise-jubilee',
+    themeTag: 'Praise',
+    previewGradient: 'linear-gradient(135deg, #071330 0%, #163570 50%, #0284c7 100%)',
+  },
+  {
+    id: 'bg-praise-hosanna',
+    name: 'Praise: Hosanna Prism Waves',
+    category: 'Motion Loop',
+    type: 'motion-canvas',
+    motionPreset: 'praise-hosanna',
+    themeTag: 'Praise',
+    previewGradient: 'linear-gradient(135deg, #1b0629 0%, #4a1259 50%, #be185d 100%)',
+  },
+  // GLORY MOTION LOOPS
+  {
+    id: 'bg-glory-shekinah',
+    name: 'Glory: Shekinah Crown Rays',
+    category: 'Motion Loop',
+    type: 'motion-canvas',
+    motionPreset: 'glory-shekinah',
+    themeTag: 'Glory',
+    previewGradient: 'linear-gradient(135deg, #140e02 0%, #382506 50%, #a16207 100%)',
+  },
+  {
+    id: 'bg-glory-throne',
+    name: 'Glory: Throne Room Sapphire',
+    category: 'Motion Loop',
+    type: 'motion-canvas',
+    motionPreset: 'glory-throne',
+    themeTag: 'Glory',
+    previewGradient: 'linear-gradient(135deg, #040d21 0%, #0d2b4d 50%, #047857 100%)',
+  },
+  // HOLINESS MOTION LOOPS
+  {
+    id: 'bg-holiness-seraphim',
+    name: 'Holiness: Pure Alabaster Light',
+    category: 'Motion Loop',
+    type: 'motion-canvas',
+    motionPreset: 'holiness-seraphim',
+    themeTag: 'Holiness',
+    previewGradient: 'linear-gradient(135deg, #0b1120 0%, #1e293b 50%, #475569 100%)',
+  },
+  {
+    id: 'bg-holiness-sanctuary',
+    name: 'Holiness: Incense & Sacred Veil',
+    category: 'Motion Loop',
+    type: 'motion-canvas',
+    motionPreset: 'holiness-sanctuary',
+    themeTag: 'Holiness',
+    previewGradient: 'linear-gradient(135deg, #0f0721 0%, #261447 50%, #4c1d95 100%)',
+  },
+  // SALVATION MOTION LOOPS
+  {
+    id: 'bg-salvation-cross',
+    name: 'Salvation: Radiance of the Cross',
+    category: 'Motion Loop',
+    type: 'motion-canvas',
+    motionPreset: 'cross-glow',
+    themeTag: 'Salvation',
+    previewGradient: 'linear-gradient(135deg, #160509 0%, #380d17 50%, #9f1239 100%)',
+  },
+  {
+    id: 'bg-salvation-dawn',
+    name: 'Salvation: Redeemed Sunrise',
+    category: 'Motion Loop',
+    type: 'motion-canvas',
+    motionPreset: 'salvation-dawn',
+    themeTag: 'Salvation',
+    previewGradient: 'linear-gradient(135deg, #12081c 0%, #4c1628 50%, #b45309 100%)',
   },
   {
     id: 'bg-slate-minimal',
@@ -332,7 +429,7 @@ export const DEFAULT_SONGS: SongItem[] = [
   },
   {
     id: 'song-to-god-be-the-glory',
-    title: 'To God Be The Glory',
+    title: 'To God Be the Glory',
     author: 'Fanny J. Crosby / William H. Doane',
     ccliNumber: '23426',
     musicalKey: 'G',
@@ -567,7 +664,7 @@ export const DEFAULT_SONGS: SongItem[] = [
   },
   {
     id: 'song-stand-up-for-jesus',
-    title: 'Stand up, Stand up for Jesus',
+    title: 'Stand Up, Stand Up for Jesus',
     author: 'George Duffield Jr. / George J. Webb',
     ccliNumber: '39433',
     musicalKey: 'Bb',
@@ -622,7 +719,7 @@ export const DEFAULT_SONGS: SongItem[] = [
   },
   {
     id: 'song-banner-of-the-cross',
-    title: 'The Banner of The Cross',
+    title: 'The Banner of the Cross',
     author: 'Daniel W. Whittle / James McGranahan',
     ccliNumber: '47621',
     musicalKey: 'G',
@@ -688,7 +785,7 @@ export const DEFAULT_SONGS: SongItem[] = [
   },
   {
     id: 'song-the-fight-is-on',
-    title: 'The Fight is On',
+    title: 'The Fight Is On',
     author: 'C. H. Morris',
     ccliNumber: '58129',
     musicalKey: 'Bb',
@@ -857,7 +954,7 @@ export const DEFAULT_SONGS: SongItem[] = [
   },
   {
     "id": "song-in-the-garden",
-    "title": "In The Garden",
+    "title": "In the Garden",
     "author": "C. Austin Miles (1912)",
     "ccliNumber": "62505",
     "musicalKey": "Ab",
@@ -967,7 +1064,7 @@ export const DEFAULT_SONGS: SongItem[] = [
   },
   {
     "id": "song-at-the-cross",
-    "title": "At the cross",
+    "title": "At the Cross",
     "author": "Isaac Watts / Ralph E. Hudson (1885)",
     "ccliNumber": "29499",
     "musicalKey": "E",
@@ -1211,7 +1308,7 @@ export const DEFAULT_SONGS: SongItem[] = [
   },
   {
     "id": "song-i-stand-amazed",
-    "title": "I stand amaze",
+    "title": "I Stand Amaze",
     "author": "Charles H. Gabriel (1905)",
     "ccliNumber": "25297",
     "musicalKey": "Ab",
@@ -1277,7 +1374,7 @@ export const DEFAULT_SONGS: SongItem[] = [
   },
   {
     "id": "song-now-i-belong-to-jesus",
-    "title": "Now I belong to Jesus",
+    "title": "Now I Belong to Jesus",
     "author": "Norman J. Clayton (1938)",
     "ccliNumber": "10048",
     "musicalKey": "Eb",
@@ -1332,7 +1429,7 @@ export const DEFAULT_SONGS: SongItem[] = [
   },
   {
     "id": "song-standing-on-the-promises",
-    "title": "Standing on the promises",
+    "title": "Standing on the Promises",
     "author": "Russell Kelso Carter (1886)",
     "ccliNumber": "31803",
     "musicalKey": "Bb",
@@ -1453,7 +1550,7 @@ export const DEFAULT_SONGS: SongItem[] = [
   },
   {
     "id": "song-bringing-in-the-sheaves",
-    "title": "Bringing in the sheaves",
+    "title": "Bringing in the Sheaves",
     "author": "Knowles Shaw / George A. Minor (1874)",
     "ccliNumber": "47124",
     "musicalKey": "C",
@@ -1508,7 +1605,7 @@ export const DEFAULT_SONGS: SongItem[] = [
   },
   {
     "id": "song-blessed-assurance",
-    "title": "Blessed assurance",
+    "title": "Blessed Assurance",
     "author": "Fanny J. Crosby / Phoebe P. Knapp (1873)",
     "ccliNumber": "22324",
     "musicalKey": "D",
@@ -1563,7 +1660,7 @@ export const DEFAULT_SONGS: SongItem[] = [
   },
   {
     "id": "song-draw-me-nearer",
-    "title": "Draw me nearer",
+    "title": "Draw Me Nearer",
     "author": "Fanny J. Crosby / William H. Doane (1875)",
     "ccliNumber": "27213",
     "musicalKey": "G",
@@ -1618,7 +1715,7 @@ export const DEFAULT_SONGS: SongItem[] = [
   },
   {
     "id": "song-great-is-thy-faithfulness",
-    "title": "Great is thy faithfulness",
+    "title": "Great Is Thy Faithfulness",
     "author": "Thomas O. Chisholm / William M. Runyan (1923)",
     "ccliNumber": "18723",
     "musicalKey": "D",
@@ -1673,7 +1770,7 @@ export const DEFAULT_SONGS: SongItem[] = [
   },
   {
     "id": "song-power-in-the-blood",
-    "title": "There is power in the blood",
+    "title": "There Is Power in the Blood",
     "author": "Lewis E. Jones (1899)",
     "ccliNumber": "21370",
     "musicalKey": "Bb",
@@ -1739,7 +1836,7 @@ export const DEFAULT_SONGS: SongItem[] = [
   },
   {
     "id": "song-leaning-on-arms",
-    "title": "Leaning on the everlasting arms",
+    "title": "Leaning on the Everlasting Arms",
     "author": "Elisha A. Hoffman / Anthony J. Showalter (1887)",
     "ccliNumber": "31340",
     "musicalKey": "G",
@@ -1794,7 +1891,7 @@ export const DEFAULT_SONGS: SongItem[] = [
   },
   {
     "id": "song-ill-fly-away",
-    "title": "I’ll fly away",
+    "title": "I’ll Fly Away",
     "author": "Albert E. Brumley (1929)",
     "ccliNumber": "26399",
     "musicalKey": "G",
@@ -1848,7 +1945,7 @@ export const DEFAULT_SONGS: SongItem[] = [
   },
   {
     "id": "song-mansion-over-hilltop",
-    "title": "Mansion over the hilltop",
+    "title": "Mansion Over the Hilltop",
     "author": "Ira F. Stanphill (1949)",
     "ccliNumber": "21935",
     "musicalKey": "C",
@@ -1903,7 +2000,7 @@ export const DEFAULT_SONGS: SongItem[] = [
   },
   {
     "id": "song-when-we-all-get-to-heaven",
-    "title": "when we all get to heaven",
+    "title": "When We All Get to Heaven",
     "author": "Eliza E. Hewitt / Emily D. Wilson (1898)",
     "ccliNumber": "30571",
     "musicalKey": "C",
@@ -1967,6 +2064,7 @@ export const DEFAULT_SONGS: SongItem[] = [
       }
     ]
   },
+  ...CLASSIC_HYMNS_PACK,
 ];
 
 export const BIBLE_DATABASE: BibleVerse[] = [

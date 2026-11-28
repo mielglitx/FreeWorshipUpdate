@@ -456,22 +456,39 @@ export const LiveInterfaceTourOverlay: React.FC<LiveInterfaceTourOverlayProps> =
   const [isPlaying, setIsPlaying] = useState(true);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [replayNonce, setReplayNonce] = useState(0);
   const [rect, setRect] = useState<SpotlightRect | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const advanceTimerRef = useRef<number | null>(null);
+  const stepsRef = useRef(steps);
+  stepsRef.current = steps;
+  const stepIdxRef = useRef(stepIdx);
+  stepIdxRef.current = stepIdx;
+  const isPlayingRef = useRef(isPlaying);
+  isPlayingRef.current = isPlaying;
+  const audioEndedForStepRef = useRef(false);
+  const prevIsPlayingRef = useRef(isPlaying);
 
+  // Stable identity across parent re-renders that recreate `steps` inline
+  const tourKey = steps.map((s) => s.id).join('|');
   const currentStep = steps[stepIdx] || steps[0];
 
-  const stopAudioAndTimers = () => {
+  const clearAdvanceTimer = () => {
     if (advanceTimerRef.current) {
       window.clearTimeout(advanceTimerRef.current);
       advanceTimerRef.current = null;
     }
+  };
+
+  const stopAudioAndTimers = () => {
+    clearAdvanceTimer();
     if (audioRef.current) {
       try {
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
+        audioRef.current.onplay = null;
+        audioRef.current.onpause = null;
         audioRef.current.onended = null;
         audioRef.current.onerror = null;
       } catch {}
@@ -480,29 +497,49 @@ export const LiveInterfaceTourOverlay: React.FC<LiveInterfaceTourOverlayProps> =
     setIsSpeaking(false);
   };
 
-  // Reset to step 0 when opened or tour topic changes
+  const advanceToNextOrStop = () => {
+    const nextIdx = stepIdxRef.current + 1;
+    if (nextIdx < stepsRef.current.length) {
+      setStepIdx(nextIdx);
+    } else {
+      setIsPlaying(false);
+    }
+  };
+
+  const scheduleAdvance = (delayMs: number) => {
+    clearAdvanceTimer();
+    if (!isPlayingRef.current) return;
+    advanceTimerRef.current = window.setTimeout(() => {
+      advanceTimerRef.current = null;
+      advanceToNextOrStop();
+    }, delayMs);
+  };
+
+  // Reset to step 0 only when opened or the tour topic actually changes
   useEffect(() => {
     if (isOpen) {
       setStepIdx(0);
       setIsPlaying(true);
+      prevIsPlayingRef.current = true;
     } else {
       stopAudioAndTimers();
     }
     return () => stopAudioAndTimers();
-  }, [isOpen, steps]);
+  }, [isOpen, tourKey]);
 
   // Trigger optional UI preparation hook (e.g. switch layout to show target panel) & measure target rect
   useEffect(() => {
-    if (!isOpen || !currentStep) return;
+    const step = stepsRef.current[stepIdx] || stepsRef.current[0];
+    if (!isOpen || !step) return;
 
-    if (currentStep.onEnter) {
+    if (step.onEnter) {
       try {
-        currentStep.onEnter();
+        step.onEnter();
       } catch {}
     }
 
     const measure = () => {
-      const el = document.querySelector(currentStep.selector) as HTMLElement | null;
+      const el = document.querySelector(step.selector) as HTMLElement | null;
       if (!el) {
         setRect(null);
         return;
@@ -519,7 +556,7 @@ export const LiveInterfaceTourOverlay: React.FC<LiveInterfaceTourOverlayProps> =
       }
     };
 
-    const el = document.querySelector(currentStep.selector) as HTMLElement | null;
+    const el = document.querySelector(step.selector) as HTMLElement | null;
     if (el) {
       try {
         el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
@@ -535,46 +572,81 @@ export const LiveInterfaceTourOverlay: React.FC<LiveInterfaceTourOverlayProps> =
       window.clearInterval(interval);
       window.removeEventListener('resize', measure);
     };
-  }, [isOpen, stepIdx, currentStep?.selector]);
+  }, [isOpen, tourKey, stepIdx, currentStep?.selector]);
 
-  // Play Neural Pre-recorded Voice-Over & Auto-Advance cleanly when narration finishes
+  // Play Neural Pre-recorded Voice-Over once per step/replay (decoupled from isPlaying so
+  // pausing or finishing the last step never restarts or double-plays the audio)
   useEffect(() => {
     stopAudioAndTimers();
-    if (!isOpen || !currentStep) return;
+    audioEndedForStepRef.current = false;
 
-    const scheduleAdvance = (delayMs: number) => {
-      if (!isPlaying) return;
-      advanceTimerRef.current = window.setTimeout(() => {
-        setStepIdx((prev) => {
-          if (prev + 1 < steps.length) return prev + 1;
-          setIsPlaying(false);
-          return prev;
-        });
-      }, delayMs);
-    };
+    const step = stepsRef.current[stepIdx] || stepsRef.current[0];
+    if (!isOpen || !step) return;
 
-    if (audioEnabled && currentStep.audioUrl) {
-      const audio = new Audio(currentStep.audioUrl);
+    if (audioEnabled && step.audioUrl) {
+      const audio = new Audio(step.audioUrl);
       audioRef.current = audio;
       audio.onplay = () => setIsSpeaking(true);
+      audio.onpause = () => setIsSpeaking(false);
       audio.onended = () => {
+        audioEndedForStepRef.current = true;
         setIsSpeaking(false);
         scheduleAdvance(850);
       };
       audio.onerror = () => {
+        audioEndedForStepRef.current = true;
         setIsSpeaking(false);
         scheduleAdvance(5000);
       };
       audio.play().catch(() => {
+        audioEndedForStepRef.current = true;
         setIsSpeaking(false);
         scheduleAdvance(5000);
       });
-    } else if (isPlaying) {
+    } else {
+      audioEndedForStepRef.current = true;
       scheduleAdvance(5000);
     }
 
     return () => stopAudioAndTimers();
-  }, [isOpen, stepIdx, isPlaying, audioEnabled]);
+  }, [isOpen, tourKey, stepIdx, audioEnabled, replayNonce]);
+
+  // Handle Play/Pause transitions cleanly without restarting current step audio
+  useEffect(() => {
+    if (!isOpen) {
+      prevIsPlayingRef.current = isPlaying;
+      return;
+    }
+    if (prevIsPlayingRef.current === isPlaying) return;
+    prevIsPlayingRef.current = isPlaying;
+
+    if (!isPlaying) {
+      clearAdvanceTimer();
+      const audio = audioRef.current;
+      if (audio && !audio.paused && !audio.ended) {
+        try {
+          audio.pause();
+        } catch {}
+      }
+      return;
+    }
+
+    // Resumed via Play button
+    const audio = audioRef.current;
+    if (audio && audio.paused && !audio.ended && audioEnabled) {
+      audio.play().catch(() => {
+        audioEndedForStepRef.current = true;
+        setIsSpeaking(false);
+        scheduleAdvance(5000);
+      });
+    } else if (audioEndedForStepRef.current && !advanceTimerRef.current) {
+      if (stepIdxRef.current + 1 < stepsRef.current.length) {
+        scheduleAdvance(400);
+      } else {
+        setReplayNonce((n) => n + 1);
+      }
+    }
+  }, [isOpen, isPlaying, audioEnabled]);
 
   // Allow Escape key to exit tour
   useEffect(() => {
@@ -583,33 +655,21 @@ export const LiveInterfaceTourOverlay: React.FC<LiveInterfaceTourOverlayProps> =
       if (e.key === 'Escape') {
         onClose();
       } else if (e.key === 'ArrowRight') {
-        setStepIdx((i) => Math.min(steps.length - 1, i + 1));
+        setStepIdx((i) => Math.min(stepsRef.current.length - 1, i + 1));
       } else if (e.key === 'ArrowLeft') {
         setStepIdx((i) => Math.max(0, i - 1));
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isOpen, steps.length, onClose]);
+  }, [isOpen, onClose]);
 
   if (!isOpen || !currentStep) return null;
 
   const replayAudio = () => {
-    stopAudioAndTimers();
     if (!currentStep.audioUrl) return;
     setAudioEnabled(true);
-    const audio = new Audio(currentStep.audioUrl);
-    audioRef.current = audio;
-    audio.onplay = () => setIsSpeaking(true);
-    audio.onended = () => {
-      setIsSpeaking(false);
-      if (isPlaying) {
-        advanceTimerRef.current = window.setTimeout(() => {
-          setStepIdx((prev) => (prev + 1 < steps.length ? prev + 1 : prev));
-        }, 850);
-      }
-    };
-    audio.play().catch(() => setIsSpeaking(false));
+    setReplayNonce((n) => n + 1);
   };
 
   // Compute smart floating coach card placement so it never obscures the spotlighted control

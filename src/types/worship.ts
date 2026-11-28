@@ -18,6 +18,8 @@ export interface Slide {
   tag: SectionTag | string;
   label?: string;
   lines: string[];
+  secondaryLines?: string[]; // Bilingual secondary translation lines
+  secondaryLabel?: string;   // e.g. "MBB 1901"
   subtext?: string; // e.g. Scripture reference or CCLI credit
   chords?: string;  // Optional stage-only chord notes
   backgroundOverrideId?: string;
@@ -30,6 +32,7 @@ export interface SongItem {
   ccliNumber: string;
   musicalKey: string;
   bpm?: number;
+  arrangement?: string[]; // Reusable section tag play order (e.g. ["Verse 1", "Chorus", "Verse 2", "Chorus"])
   defaultBackgroundId?: string;
   slides: Slide[];
 }
@@ -51,13 +54,32 @@ export interface BibleTranslationMeta {
 
 export type MediaType = 'motion-canvas' | 'gradient' | 'image' | 'video';
 
+export type MotionPresetId =
+  | 'aurora'
+  | 'particles'
+  | 'nebula'
+  | 'warm-worship'
+  | 'deep-ocean'
+  | 'royal-gold'
+  | 'cross-glow'
+  | 'worship-altar'
+  | 'worship-river'
+  | 'praise-jubilee'
+  | 'praise-hosanna'
+  | 'glory-shekinah'
+  | 'glory-throne'
+  | 'holiness-seraphim'
+  | 'holiness-sanctuary'
+  | 'salvation-dawn';
+
 export interface MediaAsset {
   id: string;
   name: string;
   category: 'Motion Loop' | 'Still Background' | 'Logo / Graphic' | 'Custom Upload';
   type: MediaType;
   previewGradient: string;
-  motionPreset?: 'aurora' | 'particles' | 'nebula' | 'warm-worship' | 'deep-ocean' | 'royal-gold' | 'cross-glow';
+  motionPreset?: MotionPresetId;
+  themeTag?: 'Worship' | 'Praise' | 'Glory' | 'Holiness' | 'Salvation';
   mediaUrl?: string;
 }
 
@@ -135,7 +157,10 @@ export type RemoteControlAction =
   | { action: 'SEND_ALERT'; message: string; urgent: boolean }
   | { action: 'CLEAR_ALERT' }
   | { action: 'DELETE_SCHEDULE_ITEM'; itemId: string }
-  | { action: 'CLEAR_SCHEDULE' };
+  | { action: 'CLEAR_SCHEDULE' }
+  | { action: 'SET_TRANSPOSE'; semitones: number }
+  | { action: 'TRIGGER_PAD'; musicalKey: string }
+  | { action: 'STOP_PAD' };
 
 export interface LanConnectionEvent {
   type: 'connected' | 'disconnected';
@@ -200,6 +225,8 @@ export interface ScheduleItem {
   title: string;
   subtitle: string;
   sourceId?: string;
+  musicalKey?: string;
+  bpm?: number;
   backgroundId: string;
   themeId: string;
   slides: Slide[];
@@ -229,6 +256,7 @@ export interface LiveBroadcastPayload {
   activeItemType?: ScheduleItemType;
   activeItemTitle: string;
   activeItemSubtitle: string;
+  activeItemAuthor?: string;
   activeSlideIndex: number;
   currentSlide: Slide | null;
   nextSlide: Slide | null;
@@ -261,5 +289,10 @@ export interface LiveBroadcastPayload {
   logoTitle: string;
   logoSubtitle: string;
   logoAsset?: MediaAsset | null;
+  activeSongKey?: string;
+  activeSongBpm?: number;
+  stageTransposeSemitones?: number;
+  remotePinRequired?: boolean;
+  remotePinHash?: string;
   timestamp: number;
 }

@@ -7,6 +7,7 @@ import {
   SongItem,
   ThemeTemplate,
 } from '../types/worship';
+import { formatSongTitleSmart } from './songStorage';
 
 export interface FreeWorshipBackupBundle {
   format: 'freeworship-backup-v1';
@@ -239,7 +240,7 @@ export function normalizeSongItem(raw: any, fallbackTitle = 'Imported Song'): So
   }
 
   const id = String(raw.id || `song-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
-  const title = String(raw.title || fallbackTitle).trim();
+  const title = formatSongTitleSmart(String(raw.title || fallbackTitle)) || fallbackTitle;
   const author = String(raw.author || raw.artist || 'Unknown').trim();
   const musicalKey = String(raw.musicalKey || raw.key || 'C').trim();
   const bpm = typeof raw.bpm === 'number' ? raw.bpm : (parseInt(raw.bpm, 10) || undefined);

@@ -7,6 +7,7 @@ import {
   SkipForward,
   SkipBack,
   Monitor,
+  MonitorOff,
   Tv,
   Radio,
   EyeOff,
@@ -49,6 +50,9 @@ import {
   Wifi,
   CheckCircle2,
   X,
+  FileSpreadsheet,
+  Pause,
+  Repeat,
 } from 'lucide-react';
 import {
   BIBLE_DATABASE,
@@ -75,12 +79,39 @@ import {
   closeExternalDisplayWindow,
   DEFAULT_ROUTING_SETTINGS,
   fetchLocalLanServerInfo,
+  hashRemotePin,
   liveSyncBus,
   loadPersistedRouting,
   openExternalDisplayWindow,
   savePersistedRouting,
   subscribeRemoteCommands,
 } from './services/liveSyncBus';
+import {
+  expandSongSlidesWithArrangement,
+  transposeChordLine,
+  transposeMusicalKey,
+} from './services/chordTransposer';
+import {
+  CcliLogEntry,
+  loadCcliUsageLog,
+  recordSongProjectionForCcli,
+  saveCcliUsageLog,
+} from './services/ccliLogService';
+import {
+  DEFAULT_MIDI_MAPPINGS,
+  MidiListenerStatus,
+  startWebMidiListener,
+} from './services/midiController';
+import { worshipPadSynth } from './services/worshipPadSynth';
+import { CcliReportModal } from './components/CcliReportModal';
+import {
+  computeAdaptiveLayoutProfile,
+  detectDisplayMetrics,
+  loadPersistedResolutionMode,
+  ResolutionPresetId,
+  savePersistedResolutionMode,
+  SUPPORTED_RESOLUTION_PRESETS,
+} from './services/resolutionAdapter';
 import { SlideStageRenderer } from './components/SlideStageRenderer';
 import { OutputDisplayView } from './components/OutputDisplayView';
 import { AndroidStageControllerView } from './components/AndroidStageControllerView';
@@ -104,6 +135,7 @@ import {
   saveSongsToIndexedDB,
   loadSongsFromIndexedDB,
   mergeSongsWithDefaults,
+  formatSongTitleSmart,
 } from './services/songStorage';
 import {
   importChordProOrTextSong,
@@ -231,9 +263,18 @@ const OperatorConsole: React.FC = () => {
     loadPersisted(STORAGE_KEYS.SCHEDULE, DEFAULT_SERVICE_SCHEDULE)
   );
   const [scheduleNotice, setScheduleNotice] = useState<string | null>(null);
-  const [mediaPool, setMediaPool] = useState<MediaAsset[]>(() =>
-    loadPersisted(STORAGE_KEYS.MEDIA, DEFAULT_MEDIA_POOL)
-  );
+  const [mediaPool, setMediaPool] = useState<MediaAsset[]>(() => {
+    const loaded = loadPersisted<MediaAsset[]>(STORAGE_KEYS.MEDIA, DEFAULT_MEDIA_POOL);
+    const defaultById = new Map(DEFAULT_MEDIA_POOL.map((d) => [d.id, d]));
+    const mergedExisting = loaded.map((item) => {
+      const def = defaultById.get(item.id);
+      return def ? { ...item, themeTag: def.themeTag, motionPreset: def.motionPreset } : item;
+    });
+    const existingIds = new Set(mergedExisting.map((m) => m.id));
+    const missingDefaults = DEFAULT_MEDIA_POOL.filter((d) => !existingIds.has(d.id));
+    return missingDefaults.length > 0 ? [...mergedExisting, ...missingDefaults] : mergedExisting;
+  });
+  const [mediaThemeFilter, setMediaThemeFilter] = useState<string>('All');
   const [themes, setThemes] = useState<ThemeTemplate[]>(() =>
     loadPersisted(STORAGE_KEYS.THEMES, DEFAULT_THEMES)
   );
@@ -263,6 +304,7 @@ const OperatorConsole: React.FC = () => {
   }, [centerLayoutMode]);
 
   const [previewSongId, setPreviewSongId] = useState<string | null>(null);
+  const [previewScheduleItemId, setPreviewScheduleItemId] = useState<string | null>(null);
   const [previewSlideIndex, setPreviewSlideIndex] = useState<number>(0);
 
   // Default Backgrounds for Songs & Bible Verses
@@ -378,7 +420,78 @@ const OperatorConsole: React.FC = () => {
 
   // Scripture Engine State
   const [selectedTranslation, setSelectedTranslation] = useState<string>('KJV');
+  const [secondaryTranslation, setSecondaryTranslation] = useState<string>('');
   const [scriptureSearch, setScriptureSearch] = useState<string>('');
+
+  // Worship Stage Transpose, Announcement Loop, CCLI Log, Remote PIN & Web MIDI State
+  const [stageTransposeSemitones, setStageTransposeSemitones] = useState<number>(0);
+  const [announcementLoop, setAnnouncementLoop] = useState<{ enabled: boolean; intervalSec: number }>({
+    enabled: false,
+    intervalSec: 8,
+  });
+  const [ccliLog, setCcliLog] = useState<CcliLogEntry[]>(() => loadCcliUsageLog());
+  const [ccliModalOpen, setCcliModalOpen] = useState(false);
+  const [operatorPin, setOperatorPin] = useState<string>(() => {
+    try {
+      return localStorage.getItem('freeworship_remote_operator_pin_v1') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [midiStatus, setMidiStatus] = useState<MidiListenerStatus>({
+    supported: false,
+    connectedInputs: [],
+    lastMessage: 'Initializing MIDI...',
+  });
+
+  // Screen Resolution Detection & Auto-Adjustment Profile
+  const [resolutionMode, setResolutionMode] = useState<ResolutionPresetId>(() =>
+    loadPersistedResolutionMode()
+  );
+  const [displayMetrics, setDisplayMetrics] = useState(() => detectDisplayMetrics());
+
+  useEffect(() => {
+    let rafId: number | null = null;
+    const handleResize = () => {
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
+      rafId = window.requestAnimationFrame(() => {
+        rafId = null;
+        setDisplayMetrics(detectDisplayMetrics());
+      });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
+    };
+  }, []);
+
+  const adaptiveLayout = useMemo(
+    () => computeAdaptiveLayoutProfile(resolutionMode, displayMetrics),
+    [resolutionMode, displayMetrics]
+  );
+
+  // Apply adaptive root font scale inside OperatorConsole
+  useEffect(() => {
+    document.documentElement.style.fontSize = `${adaptiveLayout.rootFontSizePx}px`;
+    return () => {
+      document.documentElement.style.fontSize = '';
+    };
+  }, [adaptiveLayout.rootFontSizePx]);
+
+  // Auto-switch Side-by-Side to Live single view on ultra-compact screens (< 1160px) to prevent clipping
+  const prevPreferSingleRef = useRef<boolean>(false);
+  useEffect(() => {
+    if (adaptiveLayout.preferSingleDeck && !prevPreferSingleRef.current) {
+      setCenterLayoutMode((prev) => (prev === 'side-by-side' ? 'live' : prev));
+    }
+    prevPreferSingleRef.current = adaptiveLayout.preferSingleDeck;
+  }, [adaptiveLayout.preferSingleDeck]);
+
+  const handleChangeResolutionMode = (nextMode: ResolutionPresetId) => {
+    setResolutionMode(nextMode);
+    savePersistedResolutionMode(nextMode);
+  };
 
   // Keyboard Shortcuts Help Popover & Import/Export Data Studio Modal
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
@@ -388,6 +501,57 @@ const OperatorConsole: React.FC = () => {
   const [lanRemoteModalOpen, setLanRemoteModalOpen] = useState(false);
   const [headerLanIp, setHeaderLanIp] = useState<string>('');
   const [headerConnectedClients, setHeaderConnectedClients] = useState<number>(0);
+  const [desktopWindowStatus, setDesktopWindowStatus] = useState<{
+    projectorOpen: boolean;
+    stageOpen: boolean;
+    streamOpen: boolean;
+    displayCount: number;
+  }>({
+    projectorOpen: false,
+    stageOpen: false,
+    streamOpen: false,
+    displayCount: 1,
+  });
+
+  const handleDisableSecondScreen = () => {
+    closeExternalDisplayWindow('projector');
+    setDesktopWindowStatus((prev) => ({ ...prev, projectorOpen: false }));
+  };
+
+  useEffect(() => {
+    const desktop = typeof window !== 'undefined' ? window.freeworshipDesktop : undefined;
+    if (!desktop) return;
+    let active = true;
+    desktop
+      .getStatus?.()
+      .then((status) => {
+        if (!active || !status) return;
+        setDesktopWindowStatus({
+          projectorOpen: Boolean(status.projectorOpen),
+          stageOpen: Boolean(status.stageOpen),
+          streamOpen: Boolean(status.streamOpen),
+          displayCount: typeof status.displayCount === 'number' ? status.displayCount : 1,
+        });
+      })
+      .catch(() => {});
+
+    const unsub = desktop.onWindowStatus
+      ? desktop.onWindowStatus((status) => {
+          if (!active || !status) return;
+          setDesktopWindowStatus({
+            projectorOpen: Boolean(status.projectorOpen),
+            stageOpen: Boolean(status.stageOpen),
+            streamOpen: Boolean(status.streamOpen),
+            displayCount: typeof status.displayCount === 'number' ? status.displayCount : 1,
+          });
+        })
+      : () => {};
+
+    return () => {
+      active = false;
+      unsub();
+    };
+  }, []);
   const [androidToast, setAndroidToast] = useState<{
     id: number;
     type: 'connected' | 'disconnected';
@@ -680,12 +844,28 @@ const OperatorConsole: React.FC = () => {
 
   const activeSongKey = useMemo(() => {
     if (!activeItem) return undefined;
+    if (activeItem.musicalKey) return activeItem.musicalKey;
     if (activeItem.sourceId) {
       const matchedSong = songs.find((s) => s.id === activeItem.sourceId);
       if (matchedSong) return matchedSong.musicalKey;
     }
     const keyMatch = activeItem.subtitle?.match(/Key of ([A-G][#b]?)/i);
     return keyMatch ? keyMatch[1] : undefined;
+  }, [activeItem, songs]);
+
+  const effectiveActiveSongKey = useMemo(() => {
+    if (!activeSongKey) return undefined;
+    return transposeMusicalKey(activeSongKey, stageTransposeSemitones);
+  }, [activeSongKey, stageTransposeSemitones]);
+
+  const activeSongBpm = useMemo(() => {
+    if (!activeItem) return undefined;
+    if (activeItem.bpm) return activeItem.bpm;
+    if (activeItem.sourceId) {
+      const matchedSong = songs.find((s) => s.id === activeItem.sourceId);
+      if (matchedSong?.bpm) return matchedSong.bpm;
+    }
+    return undefined;
   }, [activeItem, songs]);
 
   const currentSlide: Slide | null = useMemo(() => {
@@ -748,8 +928,14 @@ const OperatorConsole: React.FC = () => {
     return Array.from(seen.entries()).map(([tag, index]) => ({ tag, index }));
   }, [activeItem]);
 
-  // Preview Song & Preview Slide (for currently selected song in library)
+  // Preview Item (Schedule Item or Library Song) & Preview Slide
+  const previewScheduleItem: ScheduleItem | null = useMemo(() => {
+    if (!previewScheduleItemId) return null;
+    return schedule.find((item) => item.id === previewScheduleItemId) || null;
+  }, [previewScheduleItemId, schedule]);
+
   const previewSong: SongItem | null = useMemo(() => {
+    if (previewScheduleItem) return null;
     if (previewSongId) {
       const found = songs.find((s) => s.id === previewSongId);
       if (found) return found;
@@ -759,24 +945,77 @@ const OperatorConsole: React.FC = () => {
       if (found) return found;
     }
     return songs[0] || null;
-  }, [previewSongId, selectedSongIds, songs]);
+  }, [previewScheduleItem, previewSongId, selectedSongIds, songs]);
+
+  const previewTarget = useMemo(() => {
+    if (previewScheduleItem) {
+      return {
+        kind: 'schedule' as const,
+        id: previewScheduleItem.id,
+        sourceId: previewScheduleItem.sourceId,
+        type: previewScheduleItem.type,
+        title: previewScheduleItem.title,
+        subtitle: previewScheduleItem.subtitle,
+        slides: previewScheduleItem.slides,
+        backgroundId: previewScheduleItem.backgroundId,
+        themeId: previewScheduleItem.themeId,
+        scheduleItem: previewScheduleItem,
+        song: null as SongItem | null,
+      };
+    }
+    if (previewSong) {
+      return {
+        kind: 'song' as const,
+        id: previewSong.id,
+        sourceId: previewSong.id,
+        type: 'song' as const,
+        title: previewSong.title,
+        subtitle: `${previewSong.author} • Key: ${previewSong.musicalKey}${
+          previewSong.bpm ? ` • ${previewSong.bpm} BPM` : ''
+        }`,
+        slides: previewSong.slides,
+        backgroundId: previewSong.defaultBackgroundId || defaultSongBackgroundId,
+        themeId: activeTheme.id,
+        scheduleItem: null as ScheduleItem | null,
+        song: previewSong,
+      };
+    }
+    return null;
+  }, [previewScheduleItem, previewSong, defaultSongBackgroundId, activeTheme.id]);
 
   const previewSlide: Slide | null = useMemo(() => {
-    if (!previewSong || previewSong.slides.length === 0) return null;
-    const clamped = Math.max(0, Math.min(previewSlideIndex, previewSong.slides.length - 1));
-    return previewSong.slides[clamped] || null;
-  }, [previewSong, previewSlideIndex]);
+    if (!previewTarget || previewTarget.slides.length === 0) return null;
+    const clamped = Math.max(0, Math.min(previewSlideIndex, previewTarget.slides.length - 1));
+    return previewTarget.slides[clamped] || null;
+  }, [previewTarget, previewSlideIndex]);
+
+  const previewBackground: MediaAsset = useMemo(() => {
+    const bgId = previewSlide?.backgroundOverrideId || previewTarget?.backgroundId;
+    if (bgId) {
+      const found = mediaPool.find((m) => m.id === bgId);
+      if (found) return found;
+    }
+    return activeBackground;
+  }, [previewSlide, previewTarget, mediaPool, activeBackground]);
+
+  const previewTheme: ThemeTemplate = useMemo(() => {
+    if (previewTarget?.themeId) {
+      const found = themes.find((t) => t.id === previewTarget.themeId);
+      if (found) return found;
+    }
+    return activeTheme;
+  }, [previewTarget, themes, activeTheme]);
 
   const previewSectionJumpButtons = useMemo(() => {
-    if (!previewSong) return [];
+    if (!previewTarget) return [];
     const seen = new Map<string, number>();
-    previewSong.slides.forEach((sl, idx) => {
+    previewTarget.slides.forEach((sl, idx) => {
       if (!seen.has(sl.tag)) {
         seen.set(sl.tag, idx);
       }
     });
     return Array.from(seen.entries()).map(([tag, index]) => ({ tag, index }));
-  }, [previewSong]);
+  }, [previewTarget]);
 
   // Countdown Timer Effect
   useEffect(() => {
@@ -791,6 +1030,100 @@ const OperatorConsole: React.FC = () => {
     }, 1000);
     return () => clearInterval(interval);
   }, [countdown.running]);
+
+  // Reset stage transpose & disable announcement loop when switching active schedule items
+  useEffect(() => {
+    setStageTransposeSemitones(0);
+    setAnnouncementLoop((prev) => (prev.enabled ? { ...prev, enabled: false } : prev));
+  }, [activeItem?.id]);
+
+  // Auto-log live worship song projections for CCLI reporting
+  useEffect(() => {
+    if (!activeItem || activeItem.type !== 'song') return;
+    const matchedSong = activeItem.sourceId
+      ? songs.find((s) => s.id === activeItem.sourceId)
+      : songs.find((s) => s.title.toLowerCase() === activeItem.title.toLowerCase());
+    setCcliLog((prev) => {
+      const { nextLog } = recordSongProjectionForCcli(prev, {
+        id: matchedSong?.id || activeItem.sourceId || activeItem.id,
+        title: activeItem.title,
+        author: matchedSong?.author || activeItem.subtitle?.split('•')[0]?.trim(),
+        ccliNumber: matchedSong?.ccliNumber,
+        musicalKey: effectiveActiveSongKey || matchedSong?.musicalKey,
+      });
+      return nextLog;
+    });
+  }, [activeItem?.id]);
+
+  // Auto-advancing announcement / pre-service slide loop
+  useEffect(() => {
+    if (!announcementLoop.enabled || !activeItem || activeItem.slides.length <= 1) return;
+    const intervalMs = Math.max(2, announcementLoop.intervalSec) * 1000;
+    const timer = window.setInterval(() => {
+      setActiveSlideIndex((prev) => (prev + 1) % activeItem.slides.length);
+    }, intervalMs);
+    return () => window.clearInterval(timer);
+  }, [announcementLoop.enabled, announcementLoop.intervalSec, activeItem]);
+
+  // Lazy-load secondary bilingual Bible translation when selected
+  useEffect(() => {
+    if (!secondaryTranslation) return;
+    if (customBibles[secondaryTranslation]?.length >= 50) return;
+    if (!['KJV', 'NIV', 'NASB', 'ESV', 'MBB 1901'].includes(secondaryTranslation)) return;
+    let active = true;
+    loadBuiltInBible(secondaryTranslation).then((loaded) => {
+      if (active && loaded && loaded.length > 0) {
+        setCustomBibles((prev) => ({
+          ...prev,
+          [secondaryTranslation]: sortVersesCanonically(loaded),
+        }));
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [secondaryTranslation, customBibles]);
+
+  const secondaryTranslationVerses = useMemo(() => {
+    if (!secondaryTranslation) return [];
+    const custom = customBibles[secondaryTranslation];
+    if (custom && custom.length > 0) return sortVersesCanonically(custom);
+    return sortVersesCanonically(
+      BIBLE_DATABASE.filter((v) => v.translation === secondaryTranslation)
+    );
+  }, [secondaryTranslation, customBibles]);
+
+  const handleUpdateOperatorPin = (nextPin: string) => {
+    setOperatorPin(nextPin);
+    try {
+      if (nextPin) {
+        localStorage.setItem('freeworship_remote_operator_pin_v1', nextPin);
+      } else {
+        localStorage.removeItem('freeworship_remote_operator_pin_v1');
+      }
+    } catch {}
+  };
+
+  // Web MIDI foot-pedal & controller trigger listener
+  useEffect(() => {
+    let cleanup = () => {};
+    startWebMidiListener(
+      DEFAULT_MIDI_MAPPINGS,
+      (action, summary) => {
+        setMidiStatus((prev) => ({ ...prev, lastMessage: summary }));
+        if (action === 'NEXT_SLIDE') remoteCommandHandlerRef.current({ action: 'NEXT_SLIDE' });
+        else if (action === 'PREV_SLIDE') remoteCommandHandlerRef.current({ action: 'PREV_SLIDE' });
+        else if (action === 'BLACKOUT') remoteCommandHandlerRef.current({ action: 'TOGGLE_PANIC', key: 'blackout' });
+        else if (action === 'LOGO') remoteCommandHandlerRef.current({ action: 'TOGGLE_PANIC', key: 'logoMode' });
+        else if (action === 'CLEAR') remoteCommandHandlerRef.current({ action: 'TOGGLE_PANIC', key: 'clearText' });
+        else if (action === 'RESTORE') remoteCommandHandlerRef.current({ action: 'RESTORE_PANIC' });
+      },
+      (status) => setMidiStatus(status)
+    ).then((fn) => {
+      cleanup = fn;
+    });
+    return () => cleanup();
+  }, []);
 
   const handleUpdateRouting = (next: MultiScreenRoutingSettings) => {
     setRoutingSettings(next);
@@ -810,6 +1143,40 @@ const OperatorConsole: React.FC = () => {
     }
   }, []);
 
+  // Resolve writer / composer for active live item (and preview item)
+  const resolveItemAuthor = (item?: {
+    type: ScheduleItem['type'];
+    title: string;
+    subtitle?: string;
+    sourceId?: string;
+  } | null): string | undefined => {
+    if (!item) return undefined;
+    if (item.type === 'song') {
+      const matched = songs.find(
+        (s) =>
+          (item.sourceId && s.id === item.sourceId) ||
+          s.title.trim().toLowerCase() === item.title.trim().toLowerCase()
+      );
+      if (matched?.author) return matched.author;
+      if (
+        item.subtitle &&
+        !/^(opening|congregational|response|scripture)/i.test(item.subtitle.trim())
+      ) {
+        return item.subtitle.split('•')[0].trim();
+      }
+      return item.subtitle || undefined;
+    }
+    if (item.type === 'presentation' || item.type === 'announcement') {
+      return item.subtitle || undefined;
+    }
+    return undefined;
+  };
+
+  const activeItemAuthor = useMemo(
+    () => resolveItemAuthor(activeItem),
+    [activeItem, songs]
+  );
+
   // Broadcast live state on any change (<1ms zero-latency sync + LAN Android sync)
   useEffect(() => {
     const payload: LiveBroadcastPayload = {
@@ -817,6 +1184,7 @@ const OperatorConsole: React.FC = () => {
       activeItemType: activeItem?.type || 'song',
       activeItemTitle: activeItem?.title || '',
       activeItemSubtitle: activeItem?.subtitle || '',
+      activeItemAuthor,
       activeSlideIndex,
       currentSlide,
       nextSlide,
@@ -845,11 +1213,17 @@ const OperatorConsole: React.FC = () => {
       countdown,
       logoTitle,
       logoSubtitle,
+      activeSongKey,
+      activeSongBpm,
+      stageTransposeSemitones,
+      remotePinRequired: Boolean(operatorPin),
+      remotePinHash: hashRemotePin(operatorPin),
       timestamp: Date.now(),
     };
     liveSyncBus.publish(payload);
   }, [
     activeItem,
+    activeItemAuthor,
     activeSlideIndex,
     currentSlide,
     nextSlide,
@@ -864,6 +1238,10 @@ const OperatorConsole: React.FC = () => {
     countdown,
     logoTitle,
     logoSubtitle,
+    activeSongKey,
+    activeSongBpm,
+    stageTransposeSemitones,
+    operatorPin,
   ]);
 
   // Navigation Handlers
@@ -895,13 +1273,46 @@ const OperatorConsole: React.FC = () => {
   };
 
   const goToNextPreviewSlide = () => {
-    if (!previewSong || previewSong.slides.length === 0) return;
-    setPreviewSlideIndex((p) => Math.min(previewSong.slides.length - 1, p + 1));
+    if (!previewTarget || previewTarget.slides.length === 0) return;
+    setPreviewSlideIndex((p) => Math.min(previewTarget.slides.length - 1, p + 1));
   };
 
   const goToPrevPreviewSlide = () => {
-    if (!previewSong || previewSong.slides.length === 0) return;
+    if (!previewTarget || previewTarget.slides.length === 0) return;
     setPreviewSlideIndex((p) => Math.max(0, p - 1));
+  };
+
+  // Helper to compile Scripture slides with optional Bilingual Secondary Translation
+  const compileScriptureSlides = (versesToCompile: BibleVerse[]): { slides: Slide[]; title: string } => {
+    const first = versesToCompile[0];
+    const last = versesToCompile[versesToCompile.length - 1];
+    const transLabel = secondaryTranslation
+      ? `${first.translation} + ${secondaryTranslation}`
+      : first.translation;
+    const refTitle = `${first.book} ${first.chapter}:${first.verse}${
+      versesToCompile.length > 1 ? `–${last.verse}` : ''
+    } (${transLabel})`;
+
+    const secMap = new Map<string, BibleVerse>();
+    if (secondaryTranslation && secondaryTranslationVerses.length > 0) {
+      for (const sv of secondaryTranslationVerses) {
+        secMap.set(`${sv.book.toLowerCase()}|${sv.chapter}|${sv.verse}`, sv);
+      }
+    }
+
+    const slides: Slide[] = versesToCompile.map((v) => {
+      const sec = secMap.get(`${v.book.toLowerCase()}|${v.chapter}|${v.verse}`);
+      return {
+        id: `scr-${v.book}-${v.chapter}-${v.verse}-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+        tag: 'Scripture',
+        lines: [`${v.verse} ${v.text}`],
+        secondaryLines: sec ? [`${sec.verse} ${sec.text}`] : undefined,
+        secondaryLabel: sec ? sec.translation : undefined,
+        subtext: `${v.book} ${v.chapter}:${v.verse} (${transLabel})`,
+      };
+    });
+
+    return { slides, title: refTitle };
   };
 
   // Direct Live Song Presentation: Shows song on Live View with all its slides without modifying the schedule
@@ -914,19 +1325,22 @@ const OperatorConsole: React.FC = () => {
       setActiveItemId(existingSchedItem.id);
       setActiveSlideIndex(Math.max(0, Math.min(startSlideIndex, existingSchedItem.slides.length - 1)));
     } else {
+      const arrangedSlides = expandSongSlidesWithArrangement(song.slides, song.arrangement);
       const directItem: ScheduleItem = {
         id: `live-song-${song.id}`,
         type: 'song',
         title: song.title,
-        subtitle: `${song.author} • Key of ${song.musicalKey}`,
+        subtitle: `${song.author} • Key of ${song.musicalKey}${song.bpm ? ` • ${song.bpm} BPM` : ''}`,
         sourceId: song.id,
+        musicalKey: song.musicalKey,
+        bpm: song.bpm,
         backgroundId: song.defaultBackgroundId || defaultSongBackgroundId || activeBackground.id,
         themeId: activeTheme.id,
-        slides: song.slides,
+        slides: arrangedSlides,
       };
       setLiveAdhocItem(directItem);
       setActiveItemId(directItem.id);
-      setActiveSlideIndex(Math.max(0, Math.min(startSlideIndex, song.slides.length - 1)));
+      setActiveSlideIndex(Math.max(0, Math.min(startSlideIndex, arrangedSlides.length - 1)));
     }
     if (switchLayout && centerLayoutMode === 'preview') {
       setCenterLayoutMode('live');
@@ -936,24 +1350,13 @@ const OperatorConsole: React.FC = () => {
   // Direct Live Scripture Presentation: Shows scripture on Live View with all slides without modifying the schedule
   const showScriptureOnLiveDirectly = (versesToCompile: BibleVerse[], startSlideIndex = 0, switchLayout = true) => {
     if (versesToCompile.length === 0) return;
-    const first = versesToCompile[0];
-    const last = versesToCompile[versesToCompile.length - 1];
-    const refTitle = `${first.book} ${first.chapter}:${first.verse}${
-      versesToCompile.length > 1 ? `–${last.verse}` : ''
-    } (${first.translation})`;
-
-    const compiledSlides: Slide[] = versesToCompile.map((v) => ({
-      id: `scr-${v.book}-${v.chapter}-${v.verse}-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
-      tag: 'Scripture',
-      lines: [`${v.verse} ${v.text}`],
-      subtext: `${v.book} ${v.chapter}:${v.verse} (${v.translation})`,
-    }));
+    const { slides: compiledSlides, title: refTitle } = compileScriptureSlides(versesToCompile);
 
     const directItem: ScheduleItem = {
       id: `live-scr-${Date.now()}`,
       type: 'scripture',
       title: refTitle,
-      subtitle: 'Scripture Reading',
+      subtitle: secondaryTranslation ? `Bilingual Scripture (${secondaryTranslation})` : 'Scripture Reading',
       backgroundId: defaultScriptureBackgroundId || activeBackground.id,
       themeId: 'theme-scripture-classic',
       slides: compiledSlides,
@@ -968,8 +1371,20 @@ const OperatorConsole: React.FC = () => {
   };
 
   const goLiveWithPreviewSong = (slideIdx = previewSlideIndex) => {
-    if (!previewSong) return;
-    showSongOnLiveDirectly(previewSong, slideIdx, true);
+    if (!previewTarget) return;
+    if (previewTarget.scheduleItem) {
+      const target = previewTarget.scheduleItem;
+      setLiveAdhocItem(null);
+      setActiveItemId(target.id);
+      setActiveSlideIndex(Math.max(0, Math.min(slideIdx, Math.max(0, target.slides.length - 1))));
+      if (centerLayoutMode === 'preview') {
+        setCenterLayoutMode('live');
+      }
+      return;
+    }
+    if (previewTarget.song) {
+      showSongOnLiveDirectly(previewTarget.song, slideIdx, true);
+    }
   };
 
   const applyBackgroundToSongs = (bgId: string) => {
@@ -1026,6 +1441,16 @@ const OperatorConsole: React.FC = () => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') {
         e.preventDefault();
         scheduleJsonImportInputRef.current?.click();
+        return;
+      }
+
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        e.shiftKey &&
+        (e.code === 'Digit2' || e.key === '@' || e.key === '2')
+      ) {
+        e.preventDefault();
+        handleDisableSecondScreen();
         return;
       }
 
@@ -1124,6 +1549,15 @@ const OperatorConsole: React.FC = () => {
         setActiveItemId('');
         setActiveSlideIndex(0);
         break;
+      case 'SET_TRANSPOSE':
+        setStageTransposeSemitones(Math.max(-6, Math.min(6, Number(cmd.semitones) || 0)));
+        break;
+      case 'TRIGGER_PAD':
+        worshipPadSynth.startOrSwitchKey(cmd.musicalKey);
+        break;
+      case 'STOP_PAD':
+        worshipPadSynth.stopWithFade(1.5);
+        break;
       case 'ADD_SONG_TO_SCHEDULE': {
         const foundSong = songs.find((s) => s.id === cmd.songId);
         if (foundSong) {
@@ -1132,7 +1566,7 @@ const OperatorConsole: React.FC = () => {
         break;
       }
       case 'ADD_CUSTOM_SONG_TO_SCHEDULE': {
-        const title = cmd.title.trim() || 'Remote Song';
+        const title = formatSongTitleSmart(cmd.title) || 'Remote Song';
         const rawBlocks = cmd.lyrics
           .split(/\n\s*\n/)
           .map((b) => b.trim())
@@ -1279,26 +1713,29 @@ const OperatorConsole: React.FC = () => {
     setQuickEditSlideId(null);
   };
 
-  // Add Song to Schedule (supports optional startSlideIndex and switches centerTab to 'live' if going live)
+  // Add Song to Schedule (supports arrangement expansion + optional startSlideIndex)
   const addSongToSchedule = (
     song: SongItem,
     goLiveImmediately = false,
     startSlideIndex = 0
   ) => {
+    const arranged = expandSongSlidesWithArrangement(song.slides, song.arrangement);
     const newItem: ScheduleItem = {
       id: `sched-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
       type: 'song',
       title: song.title,
       subtitle: `${song.author} • Key of ${song.musicalKey}${song.bpm ? ` • ${song.bpm} BPM` : ''}`,
       sourceId: song.id,
+      musicalKey: song.musicalKey,
+      bpm: song.bpm,
       backgroundId: song.defaultBackgroundId || activeBackground.id,
       themeId: activeTheme.id,
-      slides: song.slides.map((s) => ({ ...s, id: `${s.id}-${Date.now()}` })),
+      slides: arranged.map((s, idx) => ({ ...s, id: `${s.id}-${Date.now()}-${idx}` })),
     };
     setSchedule((prev) => [...prev, newItem]);
     if (goLiveImmediately) {
       setActiveItemId(newItem.id);
-      setActiveSlideIndex(Math.max(0, Math.min(startSlideIndex, song.slides.length - 1)));
+      setActiveSlideIndex(Math.max(0, Math.min(startSlideIndex, newItem.slides.length - 1)));
       if (centerLayoutMode === 'preview') {
         setCenterLayoutMode('live');
       }
@@ -1307,24 +1744,30 @@ const OperatorConsole: React.FC = () => {
 
   // Save Song from Modal
   const handleSaveSong = (savedSong: SongItem, addToSched: boolean) => {
+    const normalizedSavedSong: SongItem = {
+      ...savedSong,
+      title: formatSongTitleSmart(savedSong.title) || savedSong.title.trim(),
+    };
     setSongs((prev) => {
-      const exists = prev.some((s) => s.id === savedSong.id);
-      return exists ? prev.map((s) => (s.id === savedSong.id ? savedSong : s)) : [savedSong, ...prev];
+      const exists = prev.some((s) => s.id === normalizedSavedSong.id);
+      return exists
+        ? prev.map((s) => (s.id === normalizedSavedSong.id ? normalizedSavedSong : s))
+        : [normalizedSavedSong, ...prev];
     });
     setSchedule((prev) =>
       prev.map((item) =>
-        item.sourceId === savedSong.id
+        item.sourceId === normalizedSavedSong.id
           ? {
               ...item,
-              title: savedSong.title,
-              subtitle: `${savedSong.author} • Key of ${savedSong.musicalKey}`,
-              slides: savedSong.slides,
+              title: normalizedSavedSong.title,
+              subtitle: `${normalizedSavedSong.author} • Key of ${normalizedSavedSong.musicalKey}`,
+              slides: normalizedSavedSong.slides,
             }
           : item
       )
     );
     if (addToSched) {
-      addSongToSchedule(savedSong, true);
+      addSongToSchedule(normalizedSavedSong, true);
     }
     setSongModalOpen(false);
     setEditingSong(null);
@@ -1693,25 +2136,14 @@ const OperatorConsole: React.FC = () => {
 
   const sendVerseListToSchedule = (versesToCompile: BibleVerse[], goLive: boolean) => {
     if (versesToCompile.length === 0) return;
-    const first = versesToCompile[0];
-    const last = versesToCompile[versesToCompile.length - 1];
-    const refTitle = `${first.book} ${first.chapter}:${first.verse}${
-      versesToCompile.length > 1 ? `–${last.verse}` : ''
-    } (${first.translation})`;
-
-    const compiledSlides: Slide[] = versesToCompile.map((v) => ({
-      id: `scr-${v.book}-${v.chapter}-${v.verse}-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
-      tag: 'Scripture',
-      lines: [`${v.verse} ${v.text}`],
-      subtext: `${v.book} ${v.chapter}:${v.verse} (${v.translation})`,
-    }));
+    const { slides: compiledSlides, title: refTitle } = compileScriptureSlides(versesToCompile);
 
     const newSched: ScheduleItem = {
       id: `sched-scr-${Date.now()}`,
       type: 'scripture',
       title: refTitle,
-      subtitle: 'Scripture Reading',
-      backgroundId: activeBackground.id,
+      subtitle: secondaryTranslation ? `Bilingual Scripture (${secondaryTranslation})` : 'Scripture Reading',
+      backgroundId: defaultScriptureBackgroundId || activeBackground.id,
       themeId: 'theme-scripture-classic',
       slides: compiledSlides,
     };
@@ -1720,6 +2152,24 @@ const OperatorConsole: React.FC = () => {
     if (goLive) {
       setActiveItemId(newSched.id);
       setActiveSlideIndex(0);
+    }
+  };
+
+  const applySlideBackgroundOverride = (slideId: string, bgId: string) => {
+    if (!activeItem) return;
+    const updateSlides = (slidesList: Slide[]) =>
+      slidesList.map((sl) =>
+        sl.id === slideId ? { ...sl, backgroundOverrideId: bgId || undefined } : sl
+      );
+
+    if (liveAdhocItem && liveAdhocItem.id === activeItem.id) {
+      setLiveAdhocItem({ ...liveAdhocItem, slides: updateSlides(liveAdhocItem.slides) });
+    } else {
+      setSchedule((prev) =>
+        prev.map((item) =>
+          item.id === activeItem.id ? { ...item, slides: updateSlides(item.slides) } : item
+        )
+      );
     }
   };
 
@@ -1859,6 +2309,7 @@ const OperatorConsole: React.FC = () => {
 
   // Multi-Select & Song Preview Click Handlers (Supports CTRL + Click and Shift + Click range selection)
   const handleSongItemSelect = (songId: string, index: number, e: React.MouseEvent) => {
+    setPreviewScheduleItemId(null);
     setPreviewSongId(songId);
     setPreviewSlideIndex(0);
     if (centerLayoutMode === 'live') {
@@ -2067,11 +2518,11 @@ const OperatorConsole: React.FC = () => {
   // WORKSPACE RENDERERS (Modularized for Single & Side-by-Side Dual View Modes)
   // -------------------------------------------------------------------------
   const renderLiveHeader = (isSideBySide = false) => (
-    <div className="p-3 bg-booth-900 border-b border-booth-800 flex flex-col gap-2 shrink-0">
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-wider border border-emerald-500/40 flex items-center gap-1">
+    <div className="p-2.5 bg-booth-900 border-b border-booth-800 flex flex-col gap-2 shrink-0 min-w-0">
+      <div className="flex items-center justify-between gap-2 flex-wrap min-w-0">
+        <div className="min-w-[140px] flex-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-wider border border-emerald-500/40 flex items-center gap-1 shrink-0 whitespace-nowrap">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
               <span>LIVE</span>
             </span>
@@ -2087,35 +2538,104 @@ const OperatorConsole: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 flex-wrap shrink-0 max-w-full">
+          {activeItem?.type === 'song' && activeSongKey && (
+            <div
+              className="flex items-center gap-1 bg-booth-950 px-1.5 py-1 rounded-lg border border-booth-800 shrink-0 whitespace-nowrap"
+              title="Live Song Transpose (updates Stage Monitor Chords & Worship Pad Key)"
+            >
+              <span className="text-[10px] font-mono font-black text-amber-300 px-1">
+                {effectiveActiveSongKey}
+                {stageTransposeSemitones !== 0
+                  ? ` (${stageTransposeSemitones > 0 ? `+${stageTransposeSemitones}` : stageTransposeSemitones})`
+                  : ''}
+              </span>
+              <button
+                type="button"
+                onClick={() => setStageTransposeSemitones((t) => Math.max(-6, t - 1))}
+                className="px-1.5 py-0.5 rounded bg-booth-850 hover:bg-booth-700 text-[10px] font-bold text-slate-200"
+              >
+                -
+              </button>
+              <button
+                type="button"
+                onClick={() => setStageTransposeSemitones((t) => Math.min(6, t + 1))}
+                className="px-1.5 py-0.5 rounded bg-booth-850 hover:bg-booth-700 text-[10px] font-bold text-slate-200"
+              >
+                +
+              </button>
+            </div>
+          )}
+
+          {activeItem && activeItem.slides.length > 1 && (
+            <div className="flex items-center gap-1 bg-booth-950 px-1.5 py-1 rounded-lg border border-booth-800 shrink-0 whitespace-nowrap">
+              <button
+                type="button"
+                onClick={() =>
+                  setAnnouncementLoop((prev) => ({ ...prev, enabled: !prev.enabled }))
+                }
+                className={`px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 transition whitespace-nowrap ${
+                  announcementLoop.enabled
+                    ? 'bg-emerald-500 text-slate-950'
+                    : 'bg-booth-850 hover:bg-booth-700 text-slate-300'
+                }`}
+                title="Auto-advance & loop slides (great for pre-service announcements or .PPTX)"
+              >
+                {announcementLoop.enabled ? (
+                  <Pause className="w-3 h-3" />
+                ) : (
+                  <Repeat className="w-3 h-3" />
+                )}
+                <span>{announcementLoop.enabled ? 'Looping' : 'Loop'}</span>
+              </button>
+              <select
+                value={announcementLoop.intervalSec}
+                onChange={(e) =>
+                  setAnnouncementLoop((prev) => ({
+                    ...prev,
+                    intervalSec: Number(e.target.value),
+                  }))
+                }
+                className="bg-booth-900 border border-booth-700 rounded px-1 py-0.5 text-[10px] font-mono text-amber-300 focus:outline-none"
+                title="Auto-advance interval"
+              >
+                {[5, 8, 12, 20, 30].map((sec) => (
+                  <option key={sec} value={sec}>
+                    {sec}s
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <button
             data-tour="pc-quick-slide-btn"
             onClick={() => setShowQuickSlideModal(true)}
             disabled={!activeItem}
-            className="px-2.5 py-1.5 rounded-lg bg-booth-800 hover:bg-booth-700 text-xs font-bold text-amber-300 border border-booth-700 flex items-center gap-1 disabled:opacity-40"
+            className="px-2 py-1.5 rounded-lg bg-booth-800 hover:bg-booth-700 text-xs font-bold text-amber-300 border border-booth-700 flex items-center gap-1 disabled:opacity-40 whitespace-nowrap shrink-0"
             title="Add a spontaneous lyric or announcement slide on the fly"
           >
-            <Zap className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">+ Quick Slide</span>
+            <Zap className="w-3.5 h-3.5 shrink-0" />
+            <span>{isSideBySide || adaptiveLayout.compactTopBar ? '+ Quick' : '+ Quick Slide'}</span>
           </button>
-          <div className="flex items-center gap-1 bg-booth-950 p-1 rounded-lg border border-booth-800">
+          <div className="flex items-center gap-1 bg-booth-950 p-1 rounded-lg border border-booth-800 shrink-0 whitespace-nowrap">
             <button
               onClick={goToPrevSlide}
               disabled={!activeItem || activeItem.slides.length === 0}
-              className="px-2.5 py-1.5 rounded bg-booth-850 hover:bg-booth-700 text-xs font-bold text-white flex items-center gap-1 disabled:opacity-40"
+              className="px-2 py-1 rounded bg-booth-850 hover:bg-booth-700 text-xs font-bold text-white flex items-center gap-1 disabled:opacity-40 whitespace-nowrap"
               title="Previous Slide (Left/Up Arrow)"
             >
-              <SkipBack className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Prev</span>
+              <SkipBack className="w-3.5 h-3.5 shrink-0" />
+              {!isSideBySide && <span className="hidden sm:inline">Prev</span>}
             </button>
             <button
               onClick={goToNextSlide}
               disabled={!activeItem || activeItem.slides.length === 0}
-              className="px-3.5 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-xs font-black text-white flex items-center gap-1 shadow disabled:opacity-40"
+              className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-xs font-black text-white flex items-center gap-1 shadow disabled:opacity-40 whitespace-nowrap"
               title="Next Slide (Spacebar / Right Arrow)"
             >
               <span>Next</span>
-              <SkipForward className="w-3.5 h-3.5" />
+              <SkipForward className="w-3.5 h-3.5 shrink-0" />
             </button>
           </div>
         </div>
@@ -2224,71 +2744,71 @@ const OperatorConsole: React.FC = () => {
   );
 
   const renderPreviewHeader = (isSideBySide = false) => (
-    <div className="p-3 bg-booth-900 border-b border-booth-800 flex flex-col gap-2 shrink-0">
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded bg-amber-500 text-black text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+    <div className="p-2.5 bg-booth-900 border-b border-booth-800 flex flex-col gap-2 shrink-0 min-w-0">
+      <div className="flex items-center justify-between gap-2 flex-wrap min-w-0">
+        <div className="min-w-[140px] flex-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="px-2 py-0.5 rounded bg-amber-500 text-black text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shrink-0 whitespace-nowrap">
               <Eye className="w-3 h-3" />
               <span>PREVIEW</span>
             </span>
             <h2 className="font-bold text-sm lg:text-base text-white truncate">
-              {previewSong?.title || 'No Song Selected'}
+              {previewTarget?.title || 'No Item Selected'}
             </h2>
           </div>
           <p className="text-xs text-slate-300 truncate mt-0.5">
-            {previewSong
-              ? `${previewSong.author} • Key: ${previewSong.musicalKey}${
-                  previewSong.bpm ? ` • ${previewSong.bpm} BPM` : ''
-                }`
-              : 'Select any song from the left library to preview its slides'}
+            {previewTarget
+              ? previewTarget.subtitle
+              : 'Select any song or schedule item to preview its slides'}
           </p>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
-          {previewSong && (
+        <div className="flex items-center gap-1.5 flex-wrap shrink-0 max-w-full">
+          {previewTarget && (
             <>
-              <button
-                onClick={() => addSongToSchedule(previewSong, false)}
-                className="px-2.5 py-1.5 rounded-lg bg-booth-800 hover:bg-booth-700 text-xs font-semibold text-slate-200 border border-booth-700"
-                title="Add this song to the service schedule"
-              >
-                + Schedule
-              </button>
+              {previewTarget.song && (
+                <button
+                  onClick={() => addSongToSchedule(previewTarget.song!, false)}
+                  className="px-2 py-1.5 rounded-lg bg-booth-800 hover:bg-booth-700 text-xs font-semibold text-slate-200 border border-booth-700 whitespace-nowrap shrink-0"
+                  title="Add this song to the service schedule"
+                >
+                  + Schedule
+                </button>
+              )}
               <button
                 onClick={() => goLiveWithPreviewSong(previewSlideIndex)}
-                className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-black text-white flex items-center gap-1.5 shadow"
-                title="Project this song live to screen immediately"
+                className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-black text-white flex items-center gap-1 shadow whitespace-nowrap shrink-0"
+                title="Project this item live to screen immediately"
               >
-                <Play className="w-3.5 h-3.5 fill-current" />
+                <Play className="w-3.5 h-3.5 fill-current shrink-0" />
                 <span>Go Live</span>
               </button>
             </>
           )}
-          <div className="flex items-center gap-1 bg-booth-950 p-1 rounded-lg border border-booth-800">
+          <div className="flex items-center gap-1 bg-booth-950 p-1 rounded-lg border border-booth-800 shrink-0 whitespace-nowrap">
             <button
               onClick={goToPrevPreviewSlide}
-              disabled={!previewSong || previewSong.slides.length === 0}
-              className="px-2.5 py-1.5 rounded bg-booth-850 hover:bg-booth-700 text-xs font-bold text-white flex items-center gap-1 disabled:opacity-40"
+              disabled={!previewTarget || previewTarget.slides.length === 0}
+              className="px-2 py-1 rounded bg-booth-850 hover:bg-booth-700 text-xs font-bold text-white flex items-center gap-1 disabled:opacity-40 whitespace-nowrap"
               title="Previous Preview Slide"
             >
-              <SkipBack className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Prev</span>
+              <SkipBack className="w-3.5 h-3.5 shrink-0" />
+              {!isSideBySide && <span className="hidden sm:inline">Prev</span>}
             </button>
             <button
               onClick={goToNextPreviewSlide}
-              disabled={!previewSong || previewSong.slides.length === 0}
-              className="px-2.5 py-1.5 rounded bg-booth-850 hover:bg-booth-700 text-xs font-bold text-white flex items-center gap-1 disabled:opacity-40"
+              disabled={!previewTarget || previewTarget.slides.length === 0}
+              className="px-2 py-1 rounded bg-booth-850 hover:bg-booth-700 text-xs font-bold text-white flex items-center gap-1 disabled:opacity-40 whitespace-nowrap"
               title="Next Preview Slide"
             >
-              <span className="hidden sm:inline">Next</span>
-              <SkipForward className="w-3.5 h-3.5" />
+              {!isSideBySide && <span className="hidden sm:inline">Next</span>}
+              <SkipForward className="w-3.5 h-3.5 shrink-0" />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Dynamic Song Flow Control Bar for Preview Song */}
+      {/* Dynamic Song Flow Control Bar for Preview Item */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 mr-1">
@@ -2304,9 +2824,7 @@ const OperatorConsole: React.FC = () => {
                 }}
                 onDoubleClick={() => {
                   setPreviewSlideIndex(index);
-                  if (previewSong) {
-                    showSongOnLiveDirectly(previewSong, index);
-                  }
+                  goLiveWithPreviewSong(index);
                 }}
                 title={`Preview ${tag} (Double-click to Project Live)`}
                 className={`px-2 py-0.5 rounded-md text-xs font-bold border transition ${
@@ -2349,14 +2867,17 @@ const OperatorConsole: React.FC = () => {
     }
 
     if (slideDeckViewMode === 'grid') {
+      const colsClass = isSideBySide
+        ? adaptiveLayout.sideBySideDeckCols === 2
+          ? 'grid-cols-2'
+          : 'grid-cols-1'
+        : adaptiveLayout.singleDeckCols === 3
+        ? 'grid-cols-3'
+        : adaptiveLayout.singleDeckCols === 2
+        ? 'grid-cols-2'
+        : 'grid-cols-1';
       return (
-        <div
-          className={`grid ${
-            isSideBySide
-              ? 'grid-cols-1 xl:grid-cols-2'
-              : 'grid-cols-2 lg:grid-cols-3'
-          } gap-3`}
-        >
+        <div className={`grid ${colsClass} gap-3`}>
           {activeItem.slides.map((slide, idx) => {
             const isLive = idx === activeSlideIndex;
             const isEditingThis = quickEditSlideId === slide.id;
@@ -2460,15 +2981,47 @@ const OperatorConsole: React.FC = () => {
                         {line}
                       </p>
                     ))}
+                    {slide.secondaryLines && slide.secondaryLines.length > 0 && (
+                      <div className="pt-1 border-t border-booth-800/80 space-y-0.5">
+                        {slide.secondaryLines.map((sLine, sIdx) => (
+                          <p key={`sec-${sIdx}`} className="text-[11px] leading-snug italic text-amber-200/90">
+                            {sLine}
+                          </p>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {slide.chords && !isEditingThis && (
-                  <div className="mt-2 pt-1.5 border-t border-booth-800 flex items-center justify-between text-[11px] text-amber-300 font-mono">
-                    <span className="truncate">♪ {slide.chords}</span>
-                    <span className="text-[10px] text-slate-500 font-sans">
-                      Key [{idx + 1}]
+                {!isEditingThis && (
+                  <div
+                    className="mt-2 pt-1.5 border-t border-booth-800 flex items-center justify-between gap-1.5 flex-wrap text-[11px]"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span className="truncate text-amber-300 font-mono min-w-0 flex-1">
+                      {slide.chords
+                        ? `♪ ${transposeChordLine(slide.chords, stageTransposeSemitones)}`
+                        : slide.backgroundOverrideId
+                        ? 'Custom Slide BG'
+                        : `Key [${idx + 1}]`}
                     </span>
+                    <select
+                      value={slide.backgroundOverrideId || ''}
+                      onChange={(e) => applySlideBackgroundOverride(slide.id, e.target.value)}
+                      className={`max-w-[110px] bg-booth-950 border rounded px-1 py-0.5 text-[10px] focus:outline-none shrink-0 ${
+                        slide.backgroundOverrideId
+                          ? 'border-sky-500/60 text-sky-300 font-bold'
+                          : 'border-booth-800 text-slate-400'
+                      }`}
+                      title="Per-slide background override"
+                    >
+                      <option value="">BG: Default</option>
+                      {mediaPool.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 )}
               </div>
@@ -2611,33 +3164,38 @@ const OperatorConsole: React.FC = () => {
   };
 
   const renderPreviewSlideDeck = (isSideBySide = false) => {
-    if (!previewSong) {
+    if (!previewTarget) {
       return (
         <div className="h-full min-h-[300px] flex flex-col items-center justify-center p-8 text-center text-slate-500 space-y-3">
           <Music className="w-12 h-12 text-slate-600 mb-1" />
           <h3 className="text-base font-bold text-slate-300">
-            No Song Selected for Preview
+            No Item Selected for Preview
           </h3>
           <p className="text-xs text-slate-400 max-w-sm">
-            Click any song in the Songs tab on the left to preview its verses, inspect chords, and test presentation flow before projecting.
+            Click any song in the library or any item in the Service Schedule to inspect its slides before projecting live.
           </p>
         </div>
       );
     }
 
     if (slideDeckViewMode === 'grid') {
+      const colsClass = isSideBySide
+        ? adaptiveLayout.sideBySideDeckCols === 2
+          ? 'grid-cols-2'
+          : 'grid-cols-1'
+        : adaptiveLayout.singleDeckCols === 3
+        ? 'grid-cols-3'
+        : adaptiveLayout.singleDeckCols === 2
+        ? 'grid-cols-2'
+        : 'grid-cols-1';
       return (
-        <div
-          className={`grid ${
-            isSideBySide
-              ? 'grid-cols-1 xl:grid-cols-2'
-              : 'grid-cols-2 lg:grid-cols-3'
-          } gap-3`}
-        >
-          {previewSong.slides.map((slide, idx) => {
+        <div className={`grid ${colsClass} gap-3`}>
+          {previewTarget.slides.map((slide, idx) => {
             const isPreviewed = idx === previewSlideIndex;
             const isLiveOnProjector =
-              activeItem?.sourceId === previewSong.id && idx === activeSlideIndex;
+              (previewTarget.scheduleItem
+                ? activeItem?.id === previewTarget.scheduleItem.id
+                : activeItem?.sourceId === previewTarget.id) && idx === activeSlideIndex;
 
             return (
               <div
@@ -2647,9 +3205,7 @@ const OperatorConsole: React.FC = () => {
                 }}
                 onDoubleClick={() => {
                   setPreviewSlideIndex(idx);
-                  if (previewSong) {
-                    showSongOnLiveDirectly(previewSong, idx);
-                  }
+                  goLiveWithPreviewSong(idx);
                 }}
                 title="Click to preview • Double-click to Project Live"
                 className={`relative rounded-xl border-2 p-3 flex flex-col justify-between transition-all cursor-pointer min-h-[148px] ${
@@ -2699,12 +3255,10 @@ const OperatorConsole: React.FC = () => {
                       onClick={(e) => {
                         e.stopPropagation();
                         setPreviewSlideIndex(idx);
-                        if (previewSong) {
-                          showSongOnLiveDirectly(previewSong, idx);
-                        }
+                        goLiveWithPreviewSong(idx);
                       }}
                       className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-[10px] font-bold text-white flex items-center gap-1 shadow"
-                      title="Project this verse live to screen"
+                      title="Project this slide live to screen"
                     >
                       <Play className="w-2.5 h-2.5 fill-current" />
                       <span>Live</span>
@@ -2747,10 +3301,12 @@ const OperatorConsole: React.FC = () => {
     /* PREVIEW: LIST VIEW */
     return (
       <div className="space-y-2">
-        {previewSong.slides.map((slide, idx) => {
+        {previewTarget.slides.map((slide, idx) => {
           const isPreviewed = idx === previewSlideIndex;
           const isLiveOnProjector =
-            activeItem?.sourceId === previewSong.id && idx === activeSlideIndex;
+            (previewTarget.scheduleItem
+              ? activeItem?.id === previewTarget.scheduleItem.id
+              : activeItem?.sourceId === previewTarget.id) && idx === activeSlideIndex;
 
           return (
             <div
@@ -2760,9 +3316,7 @@ const OperatorConsole: React.FC = () => {
               }}
               onDoubleClick={() => {
                 setPreviewSlideIndex(idx);
-                if (previewSong) {
-                  showSongOnLiveDirectly(previewSong, idx);
-                }
+                goLiveWithPreviewSong(idx);
               }}
               title="Click to preview • Double-click to Project Live"
               className={`rounded-xl border-2 p-3 transition-all cursor-pointer flex items-center justify-between gap-3 ${
@@ -2825,9 +3379,7 @@ const OperatorConsole: React.FC = () => {
                   onClick={(e) => {
                     e.stopPropagation();
                     setPreviewSlideIndex(idx);
-                    if (previewSong) {
-                      showSongOnLiveDirectly(previewSong, idx);
-                    }
+                    goLiveWithPreviewSong(idx);
                   }}
                   className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-xs font-black text-white flex items-center gap-1 shadow"
                 >
@@ -2892,7 +3444,8 @@ const OperatorConsole: React.FC = () => {
           Right: Quick Output Triggers, Remote Status & Layout Controls
          ===================================================================== */}
       <header
-        className="h-9 bg-booth-950/95 border-b border-booth-800 px-2 flex items-center justify-between gap-2 shrink-0 select-none relative z-50 text-xs"
+        style={{ height: `${adaptiveLayout.topBarHeightPx}px` }}
+        className="bg-booth-950/95 border-b border-booth-800 px-2 flex items-center justify-between gap-1.5 shrink-0 select-none relative z-50 text-xs overflow-visible"
         data-top-menubar
       >
         {/* Left: App Branding & VS Code Native Dropdown Menus */}
@@ -2911,10 +3464,12 @@ const OperatorConsole: React.FC = () => {
                 }
               }}
             />
-            <span className="font-display font-black tracking-tight text-xs text-white flex items-center">
-              <span className="text-cyan-400">FREE</span>
-              <span>WORSHIP</span>
-            </span>
+            {!adaptiveLayout.compactTopBar && (
+              <span className="font-display font-black tracking-tight text-xs text-white flex items-center">
+                <span className="text-cyan-400">FREE</span>
+                <span>WORSHIP</span>
+              </span>
+            )}
           </div>
 
           {/* Menus Container */}
@@ -3088,6 +3643,21 @@ const OperatorConsole: React.FC = () => {
                       <span>Launch 2nd Screen (Projector)</span>
                     </span>
                     <span className="text-[10px] text-slate-400 font-mono">F11 / Screen 2</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      handleDisableSecondScreen();
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-red-500/20 hover:text-red-300 text-left transition group"
+                  >
+                    <span className="flex items-center gap-2">
+                      <MonitorOff className="w-3.5 h-3.5 text-red-400" />
+                      <span>Disable 2nd Screen (Projector)</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono">Ctrl+Shift+2</span>
                   </button>
 
                   <button
@@ -3313,6 +3883,58 @@ const OperatorConsole: React.FC = () => {
                       </span>
                     </button>
                   ))}
+
+                  <div className="my-1 border-t border-booth-800" />
+
+                  <div className="px-3 py-1 text-[10px] uppercase font-bold text-amber-400 tracking-wider flex items-center justify-between gap-2">
+                    <span>Screen Resolution Fit</span>
+                    <span className="font-mono text-[9px] text-slate-400">
+                      {displayMetrics.viewportWidth}×{displayMetrics.viewportHeight}
+                    </span>
+                  </div>
+
+                  <div className="max-h-52 overflow-y-auto">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpenTopMenu(null);
+                        handleChangeResolutionMode('auto');
+                      }}
+                      className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Check
+                          className={`w-3.5 h-3.5 ${
+                            resolutionMode === 'auto' ? 'text-emerald-400 opacity-100' : 'opacity-0'
+                          }`}
+                        />
+                        <span>Auto (Detect: {adaptiveLayout.metrics.matchedPresetLabel})</span>
+                      </span>
+                    </button>
+
+                    {SUPPORTED_RESOLUTION_PRESETS.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => {
+                          setOpenTopMenu(null);
+                          handleChangeResolutionMode(preset.id);
+                        }}
+                        className="w-full px-3 py-1 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition text-[11px]"
+                      >
+                        <span className="flex items-center gap-2">
+                          <Check
+                            className={`w-3.5 h-3.5 ${
+                              resolutionMode === preset.id
+                                ? 'text-amber-400 opacity-100'
+                                : 'opacity-0'
+                            }`}
+                          />
+                          <span>{preset.label}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -3383,6 +4005,25 @@ const OperatorConsole: React.FC = () => {
                       <Palette className="w-3.5 h-3.5 text-sky-400" />
                       <span>Theme Designer Studio...</span>
                     </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenTopMenu(null);
+                      setCcliModalOpen(true);
+                    }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-amber-500/20 hover:text-amber-300 text-left transition group"
+                  >
+                    <span className="flex items-center gap-2">
+                      <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>CCLI Song Usage Log &amp; CSV Report...</span>
+                    </span>
+                    {ccliLog.length > 0 && (
+                      <span className="text-[10px] text-emerald-400 font-mono">
+                        {ccliLog.length}
+                      </span>
+                    )}
                   </button>
 
                   <div className="my-1 border-t border-booth-800" />
@@ -3514,15 +4155,17 @@ const OperatorConsole: React.FC = () => {
               setPanic((prev) => ({ ...prev, blackout: !prev.blackout, logoMode: false }))
             }
             title="Shortcut: [B] — Instantly blacks out the main projector output"
-            className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition ${
+            className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider flex items-center gap-1 transition whitespace-nowrap ${
               panic.blackout
                 ? 'bg-red-600 text-white shadow-md shadow-red-600/40 ring-1 ring-red-300 animate-pulse'
                 : 'bg-booth-850 hover:bg-booth-800 text-slate-300 border border-booth-750 hover:text-white'
             }`}
           >
-            <EyeOff className="w-3 h-3" />
+            <EyeOff className="w-3 h-3 shrink-0" />
             <span>Blackout</span>
-            <kbd className="px-1 text-[9px] font-mono rounded bg-black/40 text-slate-300">B</kbd>
+            {!adaptiveLayout.hideTopKeycaps && (
+              <kbd className="px-1 text-[9px] font-mono rounded bg-black/40 text-slate-300">B</kbd>
+            )}
           </button>
 
           <button
@@ -3531,30 +4174,34 @@ const OperatorConsole: React.FC = () => {
               setPanic((prev) => ({ ...prev, logoMode: !prev.logoMode, blackout: false }))
             }
             title="Shortcut: [L] — Switches display to Sanctuary Logo & Background Loop"
-            className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition ${
+            className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider flex items-center gap-1 transition whitespace-nowrap ${
               panic.logoMode
                 ? 'bg-amber-500 text-black shadow-md shadow-amber-500/40 ring-1 ring-amber-200'
                 : 'bg-booth-850 hover:bg-booth-800 text-slate-300 border border-booth-750 hover:text-white'
             }`}
           >
-            <Sparkles className="w-3 h-3" />
+            <Sparkles className="w-3 h-3 shrink-0" />
             <span>Logo</span>
-            <kbd className="px-1 text-[9px] font-mono rounded bg-black/40 text-slate-300">L</kbd>
+            {!adaptiveLayout.hideTopKeycaps && (
+              <kbd className="px-1 text-[9px] font-mono rounded bg-black/40 text-slate-300">L</kbd>
+            )}
           </button>
 
           <button
             type="button"
             onClick={() => setPanic((prev) => ({ ...prev, clearText: !prev.clearText }))}
             title="Shortcut: [C] — Clears lyrics while keeping the motion background playing"
-            className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition ${
+            className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider flex items-center gap-1 transition whitespace-nowrap ${
               panic.clearText
                 ? 'bg-sky-500 text-black shadow-md shadow-sky-500/40 ring-1 ring-sky-200'
                 : 'bg-booth-850 hover:bg-booth-800 text-slate-300 border border-booth-750 hover:text-white'
             }`}
           >
-            <Type className="w-3 h-3" />
+            <Type className="w-3 h-3 shrink-0" />
             <span>Clear</span>
-            <kbd className="px-1 text-[9px] font-mono rounded bg-black/40 text-slate-300">C</kbd>
+            {!adaptiveLayout.hideTopKeycaps && (
+              <kbd className="px-1 text-[9px] font-mono rounded bg-black/40 text-slate-300">C</kbd>
+            )}
           </button>
 
           {(panic.blackout || panic.logoMode || panic.clearText) && (
@@ -3578,10 +4225,17 @@ const OperatorConsole: React.FC = () => {
             type="button"
             onClick={() => openExternalDisplayWindow('projector', routingSettings)}
             className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 transition shadow-sm"
-            title="Launch Projector Output on Screen 2"
+            title={
+              desktopWindowStatus.displayCount <= 1
+                ? 'Launch Projector Output (Single Monitor detected — press Ctrl+Shift+2 or Esc anytime to disable)'
+                : 'Launch Projector Output on Screen 2 (Press Ctrl+Shift+2 to disable)'
+            }
           >
             <Monitor className="w-3 h-3 text-emerald-400" />
             <span className="hidden sm:inline">2nd Screen</span>
+            {desktopWindowStatus.projectorOpen && (
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            )}
           </button>
 
           {/* Quick 3rd Screen Launcher (if enabled) */}
@@ -3712,11 +4366,14 @@ const OperatorConsole: React.FC = () => {
       {/* =====================================================================
           THREE-PANEL WORKSPACE PARADIGM
          ===================================================================== */}
-      <div className="flex-1 grid grid-cols-12 min-h-0">
+      <div
+        className="flex-1 grid min-h-0 min-w-0 overflow-hidden"
+        style={{ gridTemplateColumns: adaptiveLayout.gridTemplateColumns }}
+      >
         {/* -------------------------------------------------------------------
-            LEFT PANEL (3 cols): Library & Asset Pool (Songs, Bible, Media, Audio, Themes)
+            LEFT PANEL: Library & Asset Pool (Songs, Bible, Media, Audio, Themes)
            ------------------------------------------------------------------- */}
-        <aside className="col-span-3 bg-booth-900 border-r border-booth-800 flex flex-col min-h-0">
+        <aside className="bg-booth-900 border-r border-booth-800 flex flex-col min-h-0 min-w-0 overflow-hidden">
           {/* Library Category Tabs (5 Tabs) */}
           <div
             data-tour="pc-left-tabs"
@@ -3914,62 +4571,68 @@ const OperatorConsole: React.FC = () => {
                       </div>
 
                       <div
-                        className="flex items-center justify-between mt-3 pt-2 border-t border-booth-800"
+                        className="flex flex-col gap-1.5 mt-2.5 pt-2 border-t border-booth-800"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <span className="text-[10px] text-slate-400">
-                          {song.slides.length} slides • CCLI #{song.ccliNumber || 'N/A'}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => requestDeleteSongs([song.id])}
-                            className="p-1.5 rounded bg-booth-850 hover:bg-red-950 text-slate-400 hover:text-red-400 border border-booth-700"
-                            title="Delete Song"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              const xml = exportSongToOpenLyricsXml(song);
-                              const safeTitle = song.title.replace(/[^a-z0-9_-]+/gi, '_');
-                              downloadTextFile(
-                                `${safeTitle}.xml`,
-                                xml,
-                                'application/xml;charset=utf-8'
-                              );
-                            }}
-                            className="p-1.5 rounded bg-booth-850 hover:bg-booth-700 text-emerald-300 border border-booth-700"
-                            title="Export this song as OpenLyrics (.xml)"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => exportSongToPptx(song, activeTheme)}
-                            className="px-1.5 py-1 rounded bg-booth-850 hover:bg-booth-700 text-amber-300 border border-booth-700 text-[10px] font-black"
-                            title="Export this song as Microsoft PowerPoint (.pptx)"
-                          >
-                            .PPTX
-                          </button>
-                          <button
-                            onClick={() => {
-                              setEditingSong(song);
-                              setSongModalOpen(true);
-                            }}
-                            className="p-1.5 rounded bg-booth-850 hover:bg-booth-700 text-slate-300 border border-booth-700"
-                            title="Edit Song Lyrics & Chords"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span className="text-[10px] text-slate-400 truncate">
+                            {song.slides.length} slides • CCLI #{song.ccliNumber || 'N/A'}
+                          </span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => requestDeleteSongs([song.id])}
+                              className="p-1 rounded bg-booth-850 hover:bg-red-950 text-slate-400 hover:text-red-400 border border-booth-700"
+                              title="Delete Song"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                const xml = exportSongToOpenLyricsXml(song);
+                                const safeTitle = song.title.replace(/[^a-z0-9_-]+/gi, '_');
+                                downloadTextFile(
+                                  `${safeTitle}.xml`,
+                                  xml,
+                                  'application/xml;charset=utf-8'
+                                );
+                              }}
+                              className="p-1 rounded bg-booth-850 hover:bg-booth-700 text-emerald-300 border border-booth-700"
+                              title="Export this song as OpenLyrics (.xml)"
+                            >
+                              <Download className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => exportSongToPptx(song, activeTheme)}
+                              className="px-1.5 py-0.5 rounded bg-booth-850 hover:bg-booth-700 text-amber-300 border border-booth-700 text-[10px] font-black whitespace-nowrap"
+                              title="Export this song as Microsoft PowerPoint (.pptx)"
+                            >
+                              .PPTX
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditingSong(song);
+                                setSongModalOpen(true);
+                              }}
+                              className="p-1 rounded bg-booth-850 hover:bg-booth-700 text-slate-300 border border-booth-700"
+                              title="Edit Song Lyrics & Chords"
+                            >
+                              <Edit3 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-1">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              setPreviewScheduleItemId(null);
                               setPreviewSongId(song.id);
                               setPreviewSlideIndex(0);
                               if (centerLayoutMode === 'live') {
                                 setCenterLayoutMode('preview');
                               }
                             }}
-                            className={`px-2 py-1 rounded text-xs font-semibold flex items-center gap-1 border transition ${
+                            className={`px-2 py-1 rounded text-[11px] font-semibold flex items-center justify-center gap-1 border transition whitespace-nowrap ${
                               isPreviewActive &&
                               (centerLayoutMode === 'preview' || centerLayoutMode === 'side-by-side')
                                 ? 'bg-amber-500 text-black border-amber-400 font-bold'
@@ -3977,18 +4640,18 @@ const OperatorConsole: React.FC = () => {
                             }`}
                             title="Preview this Song's verses in Center Panel"
                           >
-                            <Eye className="w-3.5 h-3.5" />
+                            <Eye className="w-3 h-3 shrink-0" />
                             <span>Preview</span>
                           </button>
                           <button
                             onClick={() => addSongToSchedule(song, false)}
-                            className="px-2 py-1 rounded bg-booth-800 hover:bg-booth-700 text-xs font-semibold text-slate-200 border border-booth-600"
+                            className="px-2 py-1 rounded bg-booth-800 hover:bg-booth-700 text-[11px] font-semibold text-slate-200 border border-booth-600 whitespace-nowrap text-center"
                           >
                             + Schedule
                           </button>
                           <button
                             onClick={() => showSongOnLiveDirectly(song, 0)}
-                            className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white"
+                            className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-[11px] font-bold text-white whitespace-nowrap text-center"
                             title="Show directly on Live View without modifying schedule"
                           >
                             Go Live
@@ -4063,8 +4726,14 @@ const OperatorConsole: React.FC = () => {
                 availableTranslations={availableTranslations}
                 onSelectTranslation={(code) => {
                   setSelectedTranslation(code);
+                  if (secondaryTranslation === code) {
+                    setSecondaryTranslation('');
+                  }
                   setSelectedVerseKeys([]);
                 }}
+                secondaryTranslation={secondaryTranslation}
+                secondaryVerses={secondaryTranslationVerses}
+                onSelectSecondaryTranslation={(code) => setSecondaryTranslation(code)}
                 searchQuery={scriptureSearch}
                 onSearchQueryChange={setScriptureSearch}
                 selectedVerseKeys={selectedVerseKeys}
@@ -4156,11 +4825,40 @@ const OperatorConsole: React.FC = () => {
                 </div>
               )}
 
+              {/* Theme Filter Pills for Motion Loops & Backgrounds */}
+              <div className="flex items-center gap-1 flex-wrap">
+                {['All', 'Worship', 'Praise', 'Glory', 'Holiness', 'Salvation', 'Still / Custom'].map(
+                  (tab) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => setMediaThemeFilter(tab)}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold border transition ${
+                        mediaThemeFilter === tab
+                          ? 'bg-amber-500 text-black border-amber-400'
+                          : 'bg-booth-950 hover:bg-booth-800 text-slate-300 border-booth-700'
+                      }`}
+                    >
+                      {tab}
+                    </button>
+                  )
+                )}
+              </div>
+
               <div data-tour="pc-media-grid" className="flex-1 overflow-y-auto grid grid-cols-2 gap-2.5 pr-1">
-                {mediaPool.map((asset, idx) => {
-                  const isSelected = activeBackground.id === asset.id;
-                  const isMultiSelected = selectedMediaIds.includes(asset.id);
-                  const isDefaultLogo = defaultLogoMediaId === asset.id;
+                {mediaPool
+                  .filter((asset) => {
+                    if (mediaThemeFilter === 'All') return true;
+                    if (mediaThemeFilter === 'Still / Custom') {
+                      return asset.category !== 'Motion Loop';
+                    }
+                    return asset.themeTag === mediaThemeFilter;
+                  })
+                  .map((asset) => {
+                    const idx = mediaPool.findIndex((m) => m.id === asset.id);
+                    const isSelected = activeBackground.id === asset.id;
+                    const isMultiSelected = selectedMediaIds.includes(asset.id);
+                    const isDefaultLogo = defaultLogoMediaId === asset.id;
 
                   return (
                     <div
@@ -4253,7 +4951,7 @@ const OperatorConsole: React.FC = () => {
           {leftTab === 'audio' && (
             <div className="flex-1 flex flex-col min-h-0 p-3 overflow-y-auto">
               <AudioPadDeck
-                activeSongKey={activeSongKey}
+                activeSongKey={effectiveActiveSongKey}
                 tracks={audioTracks}
                 selectedTrackIds={selectedAudioIds}
                 onSelectTrack={handleAudioItemSelect}
@@ -4572,9 +5270,9 @@ const OperatorConsole: React.FC = () => {
         </aside>
 
         {/* -------------------------------------------------------------------
-            CENTER PANEL (6 cols): Live Service & Song Preview + Dynamic Slide Deck + Monitors
+            CENTER PANEL: Live Service & Song Preview + Dynamic Slide Deck + Monitors
            ------------------------------------------------------------------- */}
-        <main className="col-span-6 bg-booth-950 flex flex-col min-h-0">
+        <main className="bg-booth-950 flex flex-col min-h-0 min-w-0 overflow-hidden">
           {/* Top Control Bar: Layout View Switcher (Live / Preview / Side-by-Side) + Slide Deck View Mode (Grid vs List) */}
           <div className="bg-booth-950 px-3 py-2 border-b border-booth-800 flex items-center justify-between gap-2 shrink-0 flex-wrap">
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -4609,9 +5307,9 @@ const OperatorConsole: React.FC = () => {
               >
                 <Eye className="w-3.5 h-3.5" />
                 <span>Preview</span>
-                {previewSong && (
+                {previewTarget && (
                   <span className="max-w-[110px] truncate text-[11px] opacity-90 font-black">
-                    ({previewSong.title})
+                    ({previewTarget.title})
                   </span>
                 )}
               </button>
@@ -4665,14 +5363,14 @@ const OperatorConsole: React.FC = () => {
 
           {/* Workspace Body: Side-by-Side Dual View vs Single Live vs Single Preview */}
           {centerLayoutMode === 'side-by-side' ? (
-            <div className="flex-1 min-h-0 grid grid-cols-2 divide-x divide-booth-800 overflow-hidden">
+            <div className="flex-1 min-h-0 min-w-0 grid grid-cols-2 divide-x divide-booth-800 overflow-hidden">
               {/* Left Column: Preview View */}
               <div
                 data-tour="pc-preview-deck"
-                className="flex flex-col min-h-0 overflow-hidden bg-booth-950/60"
+                className="flex flex-col min-h-0 min-w-0 overflow-hidden bg-booth-950/60"
               >
                 {renderPreviewHeader(true)}
-                <div className="flex-1 overflow-y-auto p-3">
+                <div className="flex-1 overflow-y-auto p-3 min-w-0">
                   {renderPreviewSlideDeck(true)}
                 </div>
               </div>
@@ -4680,75 +5378,47 @@ const OperatorConsole: React.FC = () => {
               {/* Right Column: Live Service View */}
               <div
                 data-tour="pc-live-deck"
-                className="flex flex-col min-h-0 overflow-hidden bg-booth-950"
+                className="flex flex-col min-h-0 min-w-0 overflow-hidden bg-booth-950"
               >
                 {renderLiveHeader(true)}
-                <div className="flex-1 overflow-y-auto p-3">
+                <div className="flex-1 overflow-y-auto p-3 min-w-0">
                   {renderLiveSlideDeck(true)}
                 </div>
               </div>
             </div>
           ) : centerLayoutMode === 'preview' ? (
-            <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-booth-950">
+            <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden bg-booth-950">
               {renderPreviewHeader(false)}
-              <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex-1 overflow-y-auto p-4 min-w-0">
                 {renderPreviewSlideDeck(false)}
               </div>
             </div>
           ) : (
-            <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-booth-950">
+            <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden bg-booth-950">
               {renderLiveHeader(false)}
-              <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex-1 overflow-y-auto p-4 min-w-0">
                 {renderLiveSlideDeck(false)}
               </div>
             </div>
           )}
 
-          {/* Bottom Dual Broadcast Monitors: LIVE PROGRAM OUTPUT vs NEXT CUED / SELECTED SONG PREVIEW */}
-          <div className="h-60 bg-booth-900 border-t border-booth-800 p-3 grid grid-cols-2 gap-4 shrink-0">
-            {/* LIVE PROGRAM MONITOR */}
-            <div data-tour="pc-program-monitor" className="flex flex-col min-h-0">
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
-                  <span className="text-xs font-black uppercase tracking-wider text-emerald-400">
-                    PROGRAM LIVE (PROJECTOR OUTPUT)
-                  </span>
-                </div>
-                <span className="text-[11px] text-slate-400 font-mono">
-                  {activeItem ? `Slide ${activeSlideIndex + 1} of ${activeItem.slides.length}` : 'No Active Slide'}
-                </span>
-              </div>
-              <div className="flex-1 rounded-xl overflow-hidden border-2 border-emerald-500 shadow-lg relative bg-black">
-                <SlideStageRenderer
-                  slide={currentSlide}
-                  background={activeBackground}
-                  logoAsset={activeLogoAsset}
-                  theme={activeTheme}
-                  transition={routingSettings.transition || activeTheme.transition}
-                  panic={panic}
-                  logoTitle={logoTitle}
-                  logoSubtitle={logoSubtitle}
-                  stageAlert={stageAlert}
-                  scaleMode="preview"
-                  itemTitle={activeItem?.title}
-                  itemType={activeItem?.type}
-                />
-              </div>
-            </div>
-
-            {/* RIGHT MONITOR: SWITCHABLE BETWEEN CUED NEXT (IN LIVE MODE) OR SELECTED SONG PREVIEW (IN PREVIEW MODE) */}
-            {(centerLayoutMode === 'preview' || centerLayoutMode === 'side-by-side') && previewSong ? (
+          {/* Bottom Dual Broadcast Monitors: LEFT = PREVIEW / CUED NEXT • RIGHT = PROGRAM LIVE (aligned with top cards) */}
+          <div
+            style={{ height: `${adaptiveLayout.bottomMonitorHeightPx}px` }}
+            className="bg-booth-900 border-t border-booth-800 p-2.5 grid grid-cols-2 gap-3 shrink-0 min-w-0"
+          >
+            {/* LEFT MONITOR: PREVIEW (aligned under Preview cards) OR CUED NEXT (in Live single mode) */}
+            {(centerLayoutMode === 'preview' || centerLayoutMode === 'side-by-side') && previewTarget ? (
               <div className="flex flex-col min-h-0">
                 <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-amber-400" />
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
                     <span className="text-xs font-black uppercase tracking-wider text-amber-300 truncate">
-                      PREVIEW: {previewSong.title}
+                      PREVIEW: {previewTarget.title}
                     </span>
                   </div>
                   <span className="text-[11px] text-slate-400 font-mono shrink-0">
-                    Slide {previewSlideIndex + 1} of {previewSong.slides.length}
+                    Slide {previewSlideIndex + 1} of {previewTarget.slides.length}
                   </span>
                 </div>
                 <div
@@ -4758,14 +5428,19 @@ const OperatorConsole: React.FC = () => {
                 >
                   <SlideStageRenderer
                     slide={previewSlide}
-                    background={activeBackground}
-                    theme={activeTheme}
+                    background={previewBackground}
+                    theme={previewTheme}
                     panic={{ blackout: false, logoMode: false, clearText: false }}
                     logoTitle={logoTitle}
                     logoSubtitle={logoSubtitle}
                     scaleMode="preview"
-                    itemTitle={previewSong.title}
-                    itemType="song"
+                    itemTitle={previewTarget.title}
+                    itemType={previewTarget.type}
+                    itemAuthor={
+                      previewTarget.song?.author ||
+                      resolveItemAuthor(previewTarget.scheduleItem)
+                    }
+                    itemSlides={previewTarget.slides}
                   />
                   <div className="absolute bottom-2 right-2 bg-emerald-600 hover:bg-emerald-500 border border-white/30 text-white text-[10px] font-black px-2.5 py-1 rounded shadow flex items-center gap-1">
                     <Play className="w-3 h-3 fill-current" />
@@ -4806,11 +5481,44 @@ const OperatorConsole: React.FC = () => {
                 </div>
               </div>
             )}
+
+            {/* RIGHT MONITOR: LIVE PROGRAM OUTPUT (aligned under Live cards) */}
+            <div data-tour="pc-program-monitor" className="flex flex-col min-h-0">
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
+                  <span className="text-xs font-black uppercase tracking-wider text-emerald-400">
+                    PROGRAM LIVE (PROJECTOR OUTPUT)
+                  </span>
+                </div>
+                <span className="text-[11px] text-slate-400 font-mono">
+                  {activeItem ? `Slide ${activeSlideIndex + 1} of ${activeItem.slides.length}` : 'No Active Slide'}
+                </span>
+              </div>
+              <div className="flex-1 rounded-xl overflow-hidden border-2 border-emerald-500 shadow-lg relative bg-black">
+                <SlideStageRenderer
+                  slide={currentSlide}
+                  background={activeBackground}
+                  logoAsset={activeLogoAsset}
+                  theme={activeTheme}
+                  transition={routingSettings.transition || activeTheme.transition}
+                  panic={panic}
+                  logoTitle={logoTitle}
+                  logoSubtitle={logoSubtitle}
+                  stageAlert={stageAlert}
+                  scaleMode="preview"
+                  itemTitle={activeItem?.title}
+                  itemType={activeItem?.type}
+                  itemAuthor={activeItemAuthor}
+                  itemSlides={activeItem?.slides}
+                />
+              </div>
+            </div>
           </div>
         </main>
 
         {/* -------------------------------------------------------------------
-            RIGHT PANEL (3 cols): Service Schedule (Run-of-Show) + Stage Messaging
+            RIGHT PANEL: Service Schedule (Run-of-Show) + Stage Messaging
            ------------------------------------------------------------------- */}
         <aside
           data-tour="pc-schedule"
@@ -4820,7 +5528,7 @@ const OperatorConsole: React.FC = () => {
           }}
           onDragLeave={() => setIsDraggingOverSchedule(false)}
           onDrop={handleScheduleDrop}
-          className={`col-span-3 bg-booth-900 border-l flex flex-col min-h-0 transition ${
+          className={`bg-booth-900 border-l flex flex-col min-h-0 min-w-0 overflow-hidden transition ${
             isDraggingOverSchedule
               ? 'border-emerald-400 ring-2 ring-emerald-500/40 bg-emerald-950/15'
               : 'border-booth-800'
@@ -4917,13 +5625,25 @@ const OperatorConsole: React.FC = () => {
             ) : (
               schedule.map((item, idx) => {
                 const isSelected = item.id === activeItem?.id;
+                const isPreviewedItem = previewScheduleItem?.id === item.id;
                 return (
                   <div
                     key={item.id}
                     onClick={() => {
+                      setPreviewScheduleItemId(item.id);
+                      setPreviewSongId(null);
+                      setPreviewSlideIndex(0);
+                      if (centerLayoutMode === 'live') {
+                        setCenterLayoutMode('preview');
+                      }
+                    }}
+                    onDoubleClick={() => {
+                      setLiveAdhocItem(null);
                       setActiveItemId(item.id);
                       setActiveSlideIndex(0);
+                      setCenterLayoutMode((prev) => (prev === 'preview' ? 'live' : prev));
                     }}
+                    title="Click to inspect in Preview • Double-click to Project Live"
                     onContextMenu={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -4937,6 +5657,8 @@ const OperatorConsole: React.FC = () => {
                   className={`rounded-xl p-3 border-2 cursor-pointer transition relative ${
                     isSelected
                       ? 'bg-booth-850 border-emerald-400 shadow-lg'
+                      : isPreviewedItem
+                      ? 'bg-amber-950/25 border-amber-400 shadow-md'
                       : 'bg-booth-950 border-booth-800 hover:border-booth-700'
                   }`}
                 >
@@ -4946,16 +5668,28 @@ const OperatorConsole: React.FC = () => {
                         className={`w-6 h-6 rounded-lg font-mono text-xs font-black flex items-center justify-center shrink-0 mt-0.5 ${
                           isSelected
                             ? 'bg-emerald-400 text-black'
+                            : isPreviewedItem
+                            ? 'bg-amber-400 text-black'
                             : 'bg-booth-800 text-slate-400'
                         }`}
                       >
                         {idx + 1}
                       </span>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-booth-800 text-amber-300">
                             {item.type}
                           </span>
+                          {isSelected && (
+                            <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-500 text-black">
+                              LIVE
+                            </span>
+                          )}
+                          {isPreviewedItem && !isSelected && (
+                            <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-500 text-black">
+                              PREVIEW
+                            </span>
+                          )}
                           <span className="text-[10px] text-slate-400">
                             {item.slides.length} slides
                           </span>
@@ -5119,6 +5853,7 @@ const OperatorConsole: React.FC = () => {
       {songModalOpen && (
         <SongEditorModal
           initialSong={editingSong}
+          mediaPool={mediaPool}
           onSave={handleSaveSong}
           onClose={() => {
             setSongModalOpen(false);
@@ -5185,6 +5920,7 @@ const OperatorConsole: React.FC = () => {
               <button
                 onClick={() => {
                   if (contextMenu.scheduleItemId) {
+                    setLiveAdhocItem(null);
                     setActiveItemId(contextMenu.scheduleItemId);
                     setActiveSlideIndex(0);
                   }
@@ -5432,6 +6168,21 @@ const OperatorConsole: React.FC = () => {
         <LanRemoteModal
           isOpen={lanRemoteModalOpen}
           onClose={() => setLanRemoteModalOpen(false)}
+          operatorPin={operatorPin}
+          onUpdateOperatorPin={handleUpdateOperatorPin}
+          midiStatus={midiStatus}
+        />
+      )}
+
+      {ccliModalOpen && (
+        <CcliReportModal
+          isOpen={ccliModalOpen}
+          entries={ccliLog}
+          onClearLog={() => {
+            setCcliLog([]);
+            saveCcliUsageLog([]);
+          }}
+          onClose={() => setCcliModalOpen(false)}
         />
       )}
 
@@ -5651,6 +6402,14 @@ const OperatorConsole: React.FC = () => {
                 <span className="text-slate-300">Jump to Chorus / Verse</span>
                 <kbd className="px-2 py-0.5 rounded bg-booth-800 text-amber-300 font-mono">
                   R / V
+                </kbd>
+              </div>
+              <div className="bg-booth-950 p-2.5 rounded-lg border border-booth-800 flex justify-between col-span-2">
+                <span className="text-slate-300">
+                  Disable 2nd Screen (also Esc while 2nd Screen is focused)
+                </span>
+                <kbd className="px-2 py-0.5 rounded bg-red-950 text-red-300 font-mono">
+                  Ctrl + Shift + 2
                 </kbd>
               </div>
             </div>

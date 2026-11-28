@@ -13,6 +13,9 @@ interface ContinuousBibleBrowserProps {
   selectedTranslation: string;
   availableTranslations: string[];
   onSelectTranslation: (code: string) => void;
+  secondaryTranslation?: string;
+  secondaryVerses?: BibleVerse[];
+  onSelectSecondaryTranslation?: (code: string) => void;
   searchQuery: string;
   onSearchQueryChange: (q: string) => void;
   selectedVerseKeys: string[];
@@ -49,6 +52,9 @@ export const ContinuousBibleBrowser: React.FC<ContinuousBibleBrowserProps> = ({
   selectedTranslation,
   availableTranslations,
   onSelectTranslation,
+  secondaryTranslation = '',
+  secondaryVerses = [],
+  onSelectSecondaryTranslation,
   searchQuery,
   onSearchQueryChange,
   selectedVerseKeys,
@@ -84,6 +90,17 @@ export const ContinuousBibleBrowser: React.FC<ContinuousBibleBrowserProps> = ({
 
   const selectedKeySet = useMemo(() => new Set(selectedVerseKeys), [selectedVerseKeys]);
   const highlightedKeySet = useMemo(() => new Set(highlightedVerseKeys), [highlightedVerseKeys]);
+
+  // O(1) lookup map for optional bilingual secondary translation
+  const secondaryVerseMap = useMemo(() => {
+    const map = new Map<string, BibleVerse>();
+    if (!secondaryTranslation || secondaryVerses.length === 0) return map;
+    for (let i = 0; i < secondaryVerses.length; i++) {
+      const sv = secondaryVerses[i];
+      map.set(makeVerseLookupKey(sv.book, sv.chapter, sv.verse), sv);
+    }
+    return map;
+  }, [secondaryTranslation, secondaryVerses]);
 
   // Fast O(N) lookup maps across the entire 66-book Bible
   const {
@@ -162,9 +179,10 @@ export const ContinuousBibleBrowser: React.FC<ContinuousBibleBrowserProps> = ({
           : 26
         : 0;
       const gap = 8;
-      return baseBody + textLines * lineHeight + dividerHeight + gap;
+      const bilingualExtra = secondaryTranslation ? 34 : 0;
+      return baseBody + textLines * lineHeight + dividerHeight + bilingualExtra + gap;
     },
-    [verses, compact, isBookBoundary, isChapterBoundary]
+    [verses, compact, isBookBoundary, isChapterBoundary, secondaryTranslation]
   );
 
   // Prefix offsets array in typed Float64Array (<0.3ms for 31,102 verses)
@@ -318,20 +336,20 @@ export const ContinuousBibleBrowser: React.FC<ContinuousBibleBrowserProps> = ({
     };
   }, [parsedInput]);
 
-  // Keyword jump matches when query isn't a book prefix or scripture reference
+  // Multi-word AND & phrase full-text search when query isn't a book prefix or reference
   const keywordMatches = useMemo(() => {
     if (parsedInput.kind !== 'keyword') return [];
-    const q = parsedInput.keyword.toLowerCase();
+    const q = parsedInput.keyword.trim().toLowerCase();
     if (q.length < 2) return [];
+    const tokens = q.split(/\s+/).filter((t) => t.length >= 2);
+    if (tokens.length === 0) return [];
     const hits: Array<{ index: number; verse: BibleVerse }> = [];
     for (let i = 0; i < verses.length; i++) {
       const v = verses[i];
-      if (
-        v.text.toLowerCase().includes(q) ||
-        `${v.book} ${v.chapter}:${v.verse}`.toLowerCase().includes(q)
-      ) {
+      const haystack = `${v.book} ${v.chapter}:${v.verse} ${v.text}`.toLowerCase();
+      if (haystack.includes(q) || tokens.every((tok) => haystack.includes(tok))) {
         hits.push({ index: i, verse: v });
-        if (hits.length >= 40) break;
+        if (hits.length >= 80) break;
       }
     }
     return hits;
@@ -533,7 +551,7 @@ export const ContinuousBibleBrowser: React.FC<ContinuousBibleBrowserProps> = ({
           value={selectedTranslation}
           onChange={(e) => onSelectTranslation(e.target.value)}
           className="bg-booth-950 border border-booth-700 rounded-lg px-2 py-2 text-xs font-bold text-amber-300 focus:outline-none shrink-0"
-          title="Select Bible Translation"
+          title="Select Primary Bible Translation"
         >
           {availableTranslations.map((code) => (
             <option key={code} value={code}>
@@ -541,6 +559,28 @@ export const ContinuousBibleBrowser: React.FC<ContinuousBibleBrowserProps> = ({
             </option>
           ))}
         </select>
+
+        {onSelectSecondaryTranslation && (
+          <select
+            value={secondaryTranslation}
+            onChange={(e) => onSelectSecondaryTranslation(e.target.value)}
+            className={`bg-booth-950 border rounded-lg px-1.5 py-2 text-[11px] font-bold focus:outline-none shrink-0 ${
+              secondaryTranslation
+                ? 'border-emerald-500/60 text-emerald-300'
+                : 'border-booth-700 text-slate-400'
+            }`}
+            title="Optional Bilingual Secondary Translation (e.g. NIV + MBB 1901)"
+          >
+            <option value="">+ 2nd: Off</option>
+            {availableTranslations
+              .filter((code) => code !== selectedTranslation)
+              .map((code) => (
+                <option key={`sec-${code}`} value={code}>
+                  + {code}
+                </option>
+              ))}
+          </select>
+        )}
 
         <div className="relative flex-1 min-w-0">
           <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5 pointer-events-none" />
@@ -663,28 +703,47 @@ export const ContinuousBibleBrowser: React.FC<ContinuousBibleBrowserProps> = ({
             <div className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-400 flex items-center justify-between">
               <span>
                 {keywordMatches.length > 0
-                  ? `Jump to Verse (${keywordMatches.length}${keywordMatches.length >= 40 ? '+' : ''} matches)`
+                  ? `Full-Text Search (${keywordMatches.length}${keywordMatches.length >= 80 ? '+' : ''} matches)`
                   : 'No verse matches found'}
               </span>
               <span className="text-[9px] text-slate-400 font-normal">
-                Jumps with surrounding verses
+                Click to jump • Go Live right away
               </span>
             </div>
             {keywordMatches.map(({ index, verse }) => (
-              <button
+              <div
                 key={`kw-${index}`}
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  jumpToKeywordHit(index, verse);
-                }}
-                className="w-full text-left px-2.5 py-1.5 rounded-lg bg-booth-950 hover:bg-booth-800 border border-booth-800 transition"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-booth-950 hover:bg-booth-800 border border-booth-800 transition"
               >
-                <div className="text-[11px] font-bold text-emerald-300">
-                  {verse.book} {verse.chapter}:{verse.verse}
-                </div>
-                <div className="text-[11px] text-slate-300 truncate">{verse.text}</div>
-              </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    jumpToKeywordHit(index, verse);
+                  }}
+                  className="flex-1 min-w-0 text-left"
+                >
+                  <div className="text-[11px] font-bold text-emerald-300">
+                    {verse.book} {verse.chapter}:{verse.verse}
+                  </div>
+                  <div className="text-[11px] text-slate-300 truncate">{verse.text}</div>
+                </button>
+                {onProjectPassagesLive && (
+                  <button
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      jumpToKeywordHit(index, verse);
+                      onProjectPassagesLive([verse], `${verse.book} ${verse.chapter}:${verse.verse}`);
+                    }}
+                    className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-[10px] font-black text-white shrink-0"
+                    title="Project this verse live"
+                  >
+                    Live
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         )}
@@ -893,6 +952,24 @@ export const ContinuousBibleBrowser: React.FC<ContinuousBibleBrowserProps> = ({
                       >
                         {v.text}
                       </p>
+                      {secondaryTranslation && (() => {
+                        const sec = secondaryVerseMap.get(
+                          makeVerseLookupKey(v.book, v.chapter, v.verse)
+                        );
+                        if (!sec) return null;
+                        return (
+                          <p
+                            className={`${
+                              compact ? 'text-[10px]' : 'text-[11px]'
+                            } text-amber-200/90 leading-relaxed font-serif italic mt-1 pt-1 border-t border-booth-800/80`}
+                          >
+                            <span className="not-italic font-sans font-bold text-[9px] text-amber-400 mr-1">
+                              [{sec.translation}]
+                            </span>
+                            {sec.text}
+                          </p>
+                        );
+                      })()}
                     </div>
                   </div>
                 );

@@ -11,6 +11,7 @@ import {
   Image as ImageIcon,
   Layers,
   ListMusic,
+  Lock,
   Music,
   BookOpen,
   Plus,
@@ -23,6 +24,7 @@ import {
   Sparkles,
   Sun,
   Trash2,
+  Unlock,
   Wifi,
   WifiOff,
   X,
@@ -30,10 +32,17 @@ import {
 import { BibleVerse, LiveBroadcastPayload, RemoteControlAction, Slide } from '../types/worship';
 import {
   fetchRemoteStateFromHost,
+  hashRemotePin,
   liveSyncBus,
   normalizeHostUrl,
   sendRemoteCommandToHost,
 } from '../services/liveSyncBus';
+import { StageBpmPulse } from './StageBpmPulse';
+import {
+  getCapoShapeKey,
+  transposeChordLine,
+  transposeMusicalKey,
+} from '../services/chordTransposer';
 import {
   DEFAULT_MEDIA_POOL,
   DEFAULT_SERVICE_SCHEDULE,
@@ -237,13 +246,29 @@ export const AndroidStageControllerView: React.FC = () => {
   const lastSyncTimeRef = useRef<number>(0);
   const wasConnectedRef = useRef<boolean>(false);
   const connectedToastTimerRef = useRef<number | null>(null);
-  const [layoutMode, setLayoutMode] = useState<AndroidLayoutMode>('split');
+  const isStageOnlyUrl =
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('stageOnly') === '1';
+
+  const [layoutMode, setLayoutMode] = useState<AndroidLayoutMode>(
+    isStageOnlyUrl ? 'stage-only' : 'split'
+  );
   const [controllerTab, setControllerTab] = useState<
     'slides' | 'schedule' | 'add-item' | 'stage-tools'
   >('slides');
   const [clock, setClock] = useState<string>('');
   const [customAlertInput, setCustomAlertInput] = useState('');
   const [stageFontScale, setStageFontScale] = useState<number>(1.0);
+  const [localCapoFret, setLocalCapoFret] = useState<number>(0);
+  const [pinEntry, setPinEntry] = useState<string>('');
+  const [pinError, setPinError] = useState<string>('');
+  const [unlockedPinHash, setUnlockedPinHash] = useState<string>(() => {
+    try {
+      return sessionStorage.getItem('freeworship_remote_unlocked_pin_v1') || '';
+    } catch {
+      return '';
+    }
+  });
 
   // Android Remote Add Song / Bible Verse State
   const [songSearchQuery, setSongSearchQuery] = useState<string>('');
@@ -737,7 +762,38 @@ export const AndroidStageControllerView: React.FC = () => {
     }
   };
 
+  const isPinLocked = Boolean(
+    !isStageOnlyUrl &&
+      payload.remotePinRequired &&
+      payload.remotePinHash &&
+      unlockedPinHash !== payload.remotePinHash
+  );
+
+  const handleUnlockPin = () => {
+    if (!payload.remotePinHash) return;
+    const candidateHash = hashRemotePin(pinEntry);
+    if (candidateHash === payload.remotePinHash) {
+      setUnlockedPinHash(candidateHash);
+      setPinEntry('');
+      setPinError('');
+      try {
+        sessionStorage.setItem('freeworship_remote_unlocked_pin_v1', candidateHash);
+      } catch {}
+    } else {
+      setPinError('Incorrect Operator PIN');
+    }
+  };
+
   const dispatchRemoteAction = async (command: RemoteControlAction) => {
+    if (isStageOnlyUrl || isPinLocked) {
+      return;
+    }
+    if (command.action === 'SET_TRANSPOSE') {
+      setPayload((prev) => ({
+        ...prev,
+        stageTransposeSemitones: command.semitones,
+      }));
+    }
     // Optimistic UI update on Android screen for instant zero-latency feel
     if (command.action === 'SELECT_SLIDE' && payload.activeItemSlides) {
       const targetSlide = payload.activeItemSlides[command.index];
@@ -935,42 +991,49 @@ export const AndroidStageControllerView: React.FC = () => {
           )}
         </div>
 
-          {/* View Mode Switcher */}
-          <div
-            data-tour="and-view-modes"
-            className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800"
-          >
-            <button
-              onClick={() => setLayoutMode('split')}
-              className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition ${
-                layoutMode === 'split'
-                  ? 'bg-amber-500 text-slate-950'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
+          {/* View Mode Switcher (hidden in Read-Only Stage Mode) */}
+          {isStageOnlyUrl ? (
+            <div className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
+              <Lock className="w-3 h-3" />
+              <span>Stage View Only (Read-Only)</span>
+            </div>
+          ) : (
+            <div
+              data-tour="and-view-modes"
+              className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800"
             >
-              3rd Monitor + Remote
-            </button>
-            <button
-              onClick={() => setLayoutMode('stage-only')}
-              className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition ${
-                layoutMode === 'stage-only'
-                  ? 'bg-emerald-500 text-slate-950'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Full 3rd Monitor
-            </button>
-            <button
-              onClick={() => setLayoutMode('controller-only')}
-              className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition ${
-                layoutMode === 'controller-only'
-                  ? 'bg-indigo-500 text-white'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Full Controller
-            </button>
-          </div>
+              <button
+                onClick={() => setLayoutMode('split')}
+                className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition ${
+                  layoutMode === 'split'
+                    ? 'bg-amber-500 text-slate-950'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                3rd Monitor + Remote
+              </button>
+              <button
+                onClick={() => setLayoutMode('stage-only')}
+                className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition ${
+                  layoutMode === 'stage-only'
+                    ? 'bg-emerald-500 text-slate-950'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Full 3rd Monitor
+              </button>
+              <button
+                onClick={() => setLayoutMode('controller-only')}
+                className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition ${
+                  layoutMode === 'controller-only'
+                    ? 'bg-indigo-500 text-white'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Full Controller
+              </button>
+            </div>
+          )}
 
           <div
             data-tour="and-browser-permissions"
@@ -1048,7 +1111,7 @@ export const AndroidStageControllerView: React.FC = () => {
             } bg-black flex flex-col justify-between p-3 sm:p-5 relative overflow-hidden`}
           >
             {/* Stage Monitor Top Info Bar */}
-            <div className="flex items-center justify-between border-b border-slate-800/90 pb-2.5 shrink-0">
+            <div className="flex items-center justify-between border-b border-slate-800/90 pb-2.5 shrink-0 gap-2 flex-wrap">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold text-[10px] uppercase tracking-widest shrink-0">
                   3RD MONITOR • STAGE
@@ -1065,8 +1128,65 @@ export const AndroidStageControllerView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Clock & Countdown Timer */}
-              <div className="flex items-center gap-2 shrink-0">
+              {/* BPM Pulse, Transpose/Capo, Clock & Countdown Timer */}
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 flex-wrap">
+                <StageBpmPulse bpm={payload.activeSongBpm} compact={true} />
+
+                <div className="px-2 py-1 rounded-lg bg-slate-900 border border-slate-800 flex items-center gap-1.5">
+                  {payload.activeSongKey && (
+                    <span className="font-mono text-[11px] font-black text-amber-300">
+                      {transposeMusicalKey(payload.activeSongKey, payload.stageTransposeSemitones ?? 0)}
+                    </span>
+                  )}
+                  {!isStageOnlyUrl && !isPinLocked && (
+                    <div className="flex items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          dispatchRemoteAction({
+                            action: 'SET_TRANSPOSE',
+                            semitones: Math.max(-6, (payload.stageTransposeSemitones ?? 0) - 1),
+                          })
+                        }
+                        className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-slate-200"
+                        title="Transpose Down 1 Semitone"
+                      >
+                        -
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          dispatchRemoteAction({
+                            action: 'SET_TRANSPOSE',
+                            semitones: Math.min(6, (payload.stageTransposeSemitones ?? 0) + 1),
+                          })
+                        }
+                        className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-slate-200"
+                        title="Transpose Up 1 Semitone"
+                      >
+                        +
+                      </button>
+                    </div>
+                  )}
+                  <select
+                    value={localCapoFret}
+                    onChange={(e) => setLocalCapoFret(Number(e.target.value))}
+                    className="bg-slate-950 border border-slate-700 rounded px-1 py-0.5 text-[10px] font-mono text-sky-300 focus:outline-none"
+                    title="Local Guitar Capo (only affects this device)"
+                  >
+                    {[0, 1, 2, 3, 4, 5, 6, 7].map((c) => (
+                      <option key={c} value={c}>
+                        {c === 0 ? 'Capo 0' : `Capo ${c}`}
+                      </option>
+                    ))}
+                  </select>
+                  {localCapoFret > 0 && payload.activeSongKey && (
+                    <span className="text-[10px] font-mono text-sky-300">
+                      ({getCapoShapeKey(transposeMusicalKey(payload.activeSongKey, payload.stageTransposeSemitones ?? 0), localCapoFret)})
+                    </span>
+                  )}
+                </div>
+
                 <div
                   className={`px-2.5 py-1 rounded-lg border text-right ${
                     payload.countdown.secondsRemaining <= 30 && payload.countdown.running
@@ -1145,10 +1265,14 @@ export const AndroidStageControllerView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Chords Banner for Band */}
+                {/* Chords Banner for Band (auto-transposed + local Capo) */}
                 {payload.currentSlide?.chords && (
                   <div className="mb-2 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 font-mono text-xs sm:text-base font-bold tracking-wider">
-                    ♪ {payload.currentSlide.chords}
+                    ♪{' '}
+                    {transposeChordLine(
+                      payload.currentSlide.chords,
+                      (payload.stageTransposeSemitones ?? 0) - localCapoFret
+                    )}
                   </div>
                 )}
 
@@ -1167,6 +1291,12 @@ export const AndroidStageControllerView: React.FC = () => {
                   )}
                 </div>
 
+                {payload.currentSlide?.secondaryLines && payload.currentSlide.secondaryLines.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-slate-800 text-amber-200/90 italic font-semibold text-sm sm:text-base whitespace-pre-line">
+                    {payload.currentSlide.secondaryLines.join('\n')}
+                  </div>
+                )}
+
                 {payload.currentSlide?.subtext && (
                   <div className="mt-2 text-xs sm:text-sm font-semibold text-emerald-400">
                     {payload.currentSlide.subtext}
@@ -1184,7 +1314,11 @@ export const AndroidStageControllerView: React.FC = () => {
 
                 {payload.nextSlide?.chords && (
                   <div className="mt-1 px-2.5 py-1 rounded-lg bg-slate-800/90 text-amber-300/90 font-mono text-xs font-bold">
-                    ♪ {payload.nextSlide.chords}
+                    ♪{' '}
+                    {transposeChordLine(
+                      payload.nextSlide.chords,
+                      (payload.stageTransposeSemitones ?? 0) - localCapoFret
+                    )}
                   </div>
                 )}
 
@@ -1204,17 +1338,19 @@ export const AndroidStageControllerView: React.FC = () => {
                 </div>
 
                 {/* Quick Next Tap Zone right inside the Stage Monitor */}
-                <button
-                  onClick={() => dispatchRemoteAction({ action: 'NEXT_SLIDE' })}
-                  className="mt-2 w-full py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-bold flex items-center justify-center gap-1 transition active:scale-95"
-                >
-                  Tap to Project Next Slide <ChevronRight className="w-3.5 h-3.5" />
-                </button>
+                {!isStageOnlyUrl && !isPinLocked && (
+                  <button
+                    onClick={() => dispatchRemoteAction({ action: 'NEXT_SLIDE' })}
+                    className="mt-2 w-full py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-bold flex items-center justify-center gap-1 transition active:scale-95"
+                  >
+                    Tap to Project Next Slide <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
 
             {/* Stage Monitor Footer Quick Prev / Next Overlay (in Full 3rd Monitor mode) */}
-            {layoutMode === 'stage-only' && (
+            {layoutMode === 'stage-only' && !isStageOnlyUrl && !isPinLocked && (
               <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800">
                 <button
                   onClick={() => dispatchRemoteAction({ action: 'PREV_SLIDE' })}
@@ -1234,8 +1370,45 @@ export const AndroidStageControllerView: React.FC = () => {
         )}
 
         {/* ================= SECTION 2: REMOTE PROJECTOR CONTROLLER DECK ================= */}
-        {(layoutMode === 'split' || layoutMode === 'controller-only') && (
-          <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden">
+        {!isStageOnlyUrl && (layoutMode === 'split' || layoutMode === 'controller-only') && (
+          <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden relative">
+            {isPinLocked && (
+              <div className="absolute inset-0 z-30 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-5">
+                <div className="w-full max-w-xs bg-slate-900 border-2 border-amber-500/50 rounded-2xl p-5 space-y-3 text-center shadow-2xl">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center mx-auto">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-sm font-black text-white">Operator Remote PIN Required</h3>
+                  <p className="text-[11px] text-slate-400">
+                    Stage Confidence Monitor remains visible. Enter the 4-digit PIN set on the host PC to unlock slide and panic controls.
+                  </p>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={8}
+                    value={pinEntry}
+                    onChange={(e) => {
+                      setPinEntry(e.target.value);
+                      setPinError('');
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleUnlockPin();
+                    }}
+                    placeholder="Enter PIN..."
+                    className="w-full bg-black border border-slate-700 rounded-xl px-3 py-2 text-center font-mono text-lg tracking-widest text-amber-300 focus:border-amber-400 focus:outline-none"
+                  />
+                  {pinError && <p className="text-[11px] font-bold text-rose-400">{pinError}</p>}
+                  <button
+                    type="button"
+                    onClick={handleUnlockPin}
+                    className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5"
+                  >
+                    <Unlock className="w-3.5 h-3.5" />
+                    <span>Unlock Remote Controls</span>
+                  </button>
+                </div>
+              </div>
+            )}
             {/* Big Touch Transport & Projector Panic Controls */}
             <div
               data-tour="and-transport"

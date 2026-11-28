@@ -1,4 +1,4 @@
-const { app, BrowserWindow, screen, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, screen, ipcMain, dialog, shell, globalShortcut } = require('electron');
 const path = require('path');
 const http = require('http');
 const https = require('https');
@@ -266,7 +266,7 @@ function proxyRequestToViteDev(req, res, fallbackFn) {
 function handleLanWebRoute(req, res, rawUrl, urlPath) {
   const cleanLower = urlPath.toLowerCase().replace(/\/+$/, '') || '/';
 
-  // Friendly browser entry routes for Apple Safari & mobile browsers
+  // Friendly browser entry routes for Apple Safari, Stage-Only & OBS Browser Source
   if (
     cleanLower === '/remote' ||
     cleanLower === '/apple' ||
@@ -275,6 +275,18 @@ function handleLanWebRoute(req, res, rawUrl, urlPath) {
     cleanLower === '/stage'
   ) {
     res.writeHead(302, { Location: '/?view=android', 'Cache-Control': 'no-cache' });
+    res.end();
+    return true;
+  }
+
+  if (cleanLower === '/stage-only' || cleanLower === '/band') {
+    res.writeHead(302, { Location: '/?view=android&stageOnly=1', 'Cache-Control': 'no-cache' });
+    res.end();
+    return true;
+  }
+
+  if (cleanLower === '/obs' || cleanLower === '/lower-third' || cleanLower === '/stream') {
+    res.writeHead(302, { Location: '/?view=stream', 'Cache-Control': 'no-cache' });
     res.end();
     return true;
   }
@@ -477,6 +489,50 @@ function handleLanHttpRequest(req, res) {
     return;
   }
 
+  // HTTP Stream Deck / Bitfocus Companion Trigger API (GET or POST /api/trigger/<action>)
+  if (urlPath.startsWith('/api/trigger/') && (req.method === 'GET' || req.method === 'POST')) {
+    const segs = urlPath.replace(/^\/api\/trigger\//, '').split('/').filter(Boolean);
+    const act = (segs[0] || '').toLowerCase();
+    let command = null;
+    if (act === 'next') command = { action: 'NEXT_SLIDE' };
+    else if (act === 'prev' || act === 'previous') command = { action: 'PREV_SLIDE' };
+    else if (act === 'blackout') command = { action: 'TOGGLE_PANIC', key: 'blackout' };
+    else if (act === 'logo') command = { action: 'TOGGLE_PANIC', key: 'logoMode' };
+    else if (act === 'clear') command = { action: 'TOGGLE_PANIC', key: 'clearText' };
+    else if (act === 'restore') command = { action: 'RESTORE_PANIC' };
+    else if (act === 'slide' && segs[1] !== undefined) {
+      const idx = Math.max(0, parseInt(segs[1], 10) - 1);
+      if (!Number.isNaN(idx)) command = { action: 'SELECT_SLIDE', index: idx };
+    } else if (act === 'pad' && segs[1]) {
+      command = { action: 'TRIGGER_PAD', musicalKey: segs[1] };
+    } else if (act === 'stop-pad') {
+      command = { action: 'STOP_PAD' };
+    }
+
+    if (!command) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          ok: false,
+          error: 'Unknown trigger. Supported: next, prev, blackout, logo, clear, restore, slide/<1..N>, pad/<key>, stop-pad',
+        })
+      );
+      return;
+    }
+
+    pendingRemoteCommands.push({
+      id: `trig-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      command,
+      timestamp: Date.now(),
+    });
+    if (operatorWindow && !operatorWindow.isDestroyed()) {
+      operatorWindow.webContents.send('freeworship:remote-command', command);
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true, triggered: act, command }));
+    return;
+  }
+
   // Serve Web Browser Remote UI (iPhone/iPad/Mac Safari & desktop browsers) and static dist assets
   if (req.method === 'GET') {
     handleLanWebRoute(req, res, rawUrl, urlPath);
@@ -614,11 +670,17 @@ function applyBorderlessFullscreenToWindow(win, targetDisplay, options = {}) {
 }
 
 function createOperatorWindow() {
+  const primaryWorkArea = screen.getPrimaryDisplay().workAreaSize;
+  const initWidth = Math.min(1680, primaryWorkArea.width);
+  const initHeight = Math.min(980, primaryWorkArea.height);
+  const shouldStartMaximized =
+    primaryWorkArea.width <= 1560 || primaryWorkArea.height <= 900;
+
   operatorWindow = new BrowserWindow({
-    width: 1560,
-    height: 950,
-    minWidth: 1180,
-    minHeight: 720,
+    width: initWidth,
+    height: initHeight,
+    minWidth: 760,
+    minHeight: 540,
     title: 'FreeWorship Studio — Operator Control (Windows)',
     backgroundColor: '#07090e',
     autoHideMenuBar: true,
@@ -629,6 +691,10 @@ function createOperatorWindow() {
       nodeIntegration: false,
     },
   });
+
+  if (shouldStartMaximized) {
+    operatorWindow.maximize();
+  }
 
   operatorWindow.loadURL(APP_URL);
 
@@ -720,6 +786,17 @@ function openOrFocusOutputWindow(mode, options = {}) {
       }
     });
 
+    projectorWindow.webContents.on('before-input-event', (event, input) => {
+      const isCtrlShift2 =
+        (input.control || input.meta) &&
+        input.shift &&
+        (input.code === 'Digit2' || input.key === '@' || input.key === '2');
+      if (input.type === 'keyDown' && (input.key === 'Escape' || isCtrlShift2)) {
+        event.preventDefault();
+        closeOutputWindow('projector');
+      }
+    });
+
     projectorWindow.on('closed', () => {
       projectorWindow = null;
       notifyWindowStatus();
@@ -770,6 +847,26 @@ function openOrFocusOutputWindow(mode, options = {}) {
       }
     });
 
+    stageWindow.webContents.on('before-input-event', (event, input) => {
+      const isCtrlShift2 =
+        (input.control || input.meta) &&
+        input.shift &&
+        (input.code === 'Digit2' || input.key === '@' || input.key === '2');
+      const isCtrlShift3 =
+        (input.control || input.meta) &&
+        input.shift &&
+        (input.code === 'Digit3' || input.key === '#' || input.key === '3');
+      if (input.type === 'keyDown' && isCtrlShift2) {
+        event.preventDefault();
+        closeOutputWindow('projector');
+        return;
+      }
+      if (input.type === 'keyDown' && (input.key === 'Escape' || isCtrlShift3)) {
+        event.preventDefault();
+        closeOutputWindow('stage');
+      }
+    });
+
     stageWindow.on('closed', () => {
       stageWindow = null;
       notifyWindowStatus();
@@ -806,10 +903,22 @@ function openOrFocusOutputWindow(mode, options = {}) {
   }
 }
 
+function focusOperatorWindow() {
+  if (operatorWindow && !operatorWindow.isDestroyed()) {
+    if (operatorWindow.isMinimized()) {
+      operatorWindow.restore();
+    }
+    operatorWindow.show();
+    operatorWindow.focus();
+  }
+}
+
 function closeOutputWindow(mode) {
+  let closedProjector = false;
   if ((mode === 'projector' || mode === 'all') && projectorWindow && !projectorWindow.isDestroyed()) {
     projectorWindow.close();
     projectorWindow = null;
+    closedProjector = true;
   }
   if ((mode === 'stage' || mode === 'all') && stageWindow && !stageWindow.isDestroyed()) {
     stageWindow.close();
@@ -818,6 +927,9 @@ function closeOutputWindow(mode) {
   if ((mode === 'stream' || mode === 'all') && streamWindow && !streamWindow.isDestroyed()) {
     streamWindow.close();
     streamWindow = null;
+  }
+  if (closedProjector) {
+    focusOperatorWindow();
   }
   notifyWindowStatus();
 }
@@ -1218,6 +1330,25 @@ app.whenReady().then(() => {
   screen.on('display-added', notifyWindowStatus);
   screen.on('display-removed', notifyWindowStatus);
   screen.on('display-metrics-changed', notifyWindowStatus);
+
+  // OS-level emergency shortcut so single-screen operators can always disable Screen 2 even if fullscreen alwaysOnTop covers the desktop
+  try {
+    globalShortcut.register('CommandOrControl+Shift+2', () => {
+      if (projectorWindow && !projectorWindow.isDestroyed()) {
+        closeOutputWindow('projector');
+      } else {
+        focusOperatorWindow();
+      }
+    });
+  } catch (err) {
+    console.warn('Could not register CommandOrControl+Shift+2 shortcut:', err);
+  }
+});
+
+app.on('will-quit', () => {
+  try {
+    globalShortcut.unregisterAll();
+  } catch {}
 });
 
 app.on('window-all-closed', () => {

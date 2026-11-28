@@ -35,6 +35,8 @@ interface SlideStageRendererProps {
   forceShowBoundaryGuide?: boolean;
   itemTitle?: string;
   itemType?: ScheduleItemType;
+  itemAuthor?: string;
+  itemSlides?: Slide[];
 }
 
 export function resolveEffectiveBoundary(
@@ -133,6 +135,8 @@ export const SlideStageRenderer: React.FC<SlideStageRendererProps> = ({
   forceShowBoundaryGuide = false,
   itemTitle,
   itemType,
+  itemAuthor,
+  itemSlides,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const boundaryBoxRef = useRef<HTMLDivElement | null>(null);
@@ -381,9 +385,42 @@ export const SlideStageRenderer: React.FC<SlideStageRendererProps> = ({
     Boolean(slide || exitingSlide);
 
   const metaFontSizePx = Math.max(9, 24 * scaleRatio);
+  const metaSubFontSizePx = Math.max(7, 15 * scaleRatio);
+  const metaCountFontSizePx = Math.max(6.5, 13 * scaleRatio);
   const metaIconSizePx = Math.max(10, 22 * scaleRatio);
   const metaPadX = Math.max(6, 16 * scaleRatio);
   const metaPadY = Math.max(3, 7 * scaleRatio);
+
+  const displayAuthorLabel = (() => {
+    const clean = (itemAuthor || '').trim();
+    if (!clean || itemType === 'scripture') return '';
+    return /^by\s+/i.test(clean) ? clean : `By ${clean}`;
+  })();
+
+  const cardCountSummary = (() => {
+    if (!Array.isArray(itemSlides) || itemSlides.length === 0) return '';
+    if (itemType === 'song') {
+      let verses = 0;
+      let choruses = 0;
+      let others = 0;
+      for (const sl of itemSlides) {
+        const tag = (sl.tag || '').trim().toLowerCase();
+        if (/\bverse\b/.test(tag) || /^v\d+$/i.test(tag)) {
+          verses += 1;
+        } else if (/\b(chorus|refrain)\b/.test(tag) && !/\bpre[-\s]?chorus\b/.test(tag)) {
+          choruses += 1;
+        } else {
+          others += 1;
+        }
+      }
+      const vLabel = `${verses} ${verses === 1 ? 'Verse' : 'Verses'}`;
+      const cLabel = `${choruses} ${choruses === 1 ? 'Chorus' : 'Choruses'}`;
+      const oLabel = `${others} Other ${others === 1 ? 'Card' : 'Cards'}`;
+      return `${vLabel} • ${cLabel} • ${oLabel}`;
+    }
+    const total = itemSlides.length;
+    return `${total} ${total === 1 ? 'Text Card' : 'Text Cards'}`;
+  })();
 
   const renderSlideTextBlock = (
     targetSlide: Slide,
@@ -430,6 +467,33 @@ export const SlideStageRenderer: React.FC<SlideStageRendererProps> = ({
             {line}
           </p>
         ))}
+
+        {targetSlide.secondaryLines && targetSlide.secondaryLines.length > 0 && (
+          <div
+            style={{
+              marginTop: `${Math.max(4, 12 * scaleRatio)}px`,
+              paddingTop: `${Math.max(3, 8 * scaleRatio)}px`,
+              borderTop: `1px solid rgba(255,255,255,0.22)`,
+              fontSize: `${Math.max(7, computedMainFontSizePx * 0.8)}px`,
+              color: theme.accentColor || '#fde68a',
+              fontStyle: 'italic',
+              fontWeight: 600,
+              ...getTextShadowAndStrokeStyle(),
+            }}
+          >
+            {targetSlide.secondaryLines.map((sLine, sIdx) => (
+              <p
+                key={`sec-${sIdx}`}
+                style={{
+                  marginBottom:
+                    sIdx < targetSlide.secondaryLines!.length - 1 ? `${computedLineGapPx}px` : 0,
+                }}
+              >
+                {sLine}
+              </p>
+            ))}
+          </div>
+        )}
 
         {targetSlide.subtext && (
           <div
@@ -581,10 +645,10 @@ export const SlideStageRenderer: React.FC<SlideStageRendererProps> = ({
           }}
         >
           <div
-            className="inline-flex items-center rounded-lg bg-black/50 backdrop-blur-sm border border-white/15 shadow-lg max-w-full"
+            className="inline-flex items-start rounded-lg bg-black/55 backdrop-blur-sm border border-white/15 shadow-lg max-w-full"
             style={{
               padding: `${metaPadY}px ${metaPadX}px`,
-              gap: `${Math.max(4, 8 * scaleRatio)}px`,
+              gap: `${Math.max(4, 10 * scaleRatio)}px`,
             }}
           >
             {itemType === 'scripture' ? (
@@ -594,6 +658,7 @@ export const SlideStageRenderer: React.FC<SlideStageRendererProps> = ({
                   height: `${metaIconSizePx}px`,
                   color: theme.accentColor || '#fbbf24',
                   flexShrink: 0,
+                  marginTop: `${Math.max(1, 2 * scaleRatio)}px`,
                 }}
               />
             ) : (
@@ -603,20 +668,54 @@ export const SlideStageRenderer: React.FC<SlideStageRendererProps> = ({
                   height: `${metaIconSizePx}px`,
                   color: theme.accentColor || '#fbbf24',
                   flexShrink: 0,
+                  marginTop: `${Math.max(1, 2 * scaleRatio)}px`,
                 }}
               />
             )}
-            <span
-              className="font-bold tracking-wide truncate"
-              style={{
-                fontFamily: fontStack,
-                fontSize: `${metaFontSizePx}px`,
-                color: theme.textColor || '#ffffff',
-                textShadow: '0 2px 10px rgba(0,0,0,0.95)',
-              }}
-            >
-              {displayMetadataLabel}
-            </span>
+            <div className="flex flex-col min-w-0">
+              <span
+                className="font-bold tracking-wide truncate"
+                style={{
+                  fontFamily: fontStack,
+                  fontSize: `${metaFontSizePx}px`,
+                  lineHeight: 1.2,
+                  color: theme.textColor || '#ffffff',
+                  textShadow: '0 2px 10px rgba(0,0,0,0.95)',
+                }}
+              >
+                {displayMetadataLabel}
+              </span>
+              {displayAuthorLabel && (
+                <span
+                  className="font-medium truncate"
+                  style={{
+                    fontFamily: subtextFontStack,
+                    fontSize: `${metaSubFontSizePx}px`,
+                    lineHeight: 1.25,
+                    marginTop: `${Math.max(1, 2 * scaleRatio)}px`,
+                    color: theme.accentColor || '#fcd34d',
+                    textShadow: '0 1px 8px rgba(0,0,0,0.95)',
+                  }}
+                >
+                  {displayAuthorLabel}
+                </span>
+              )}
+              {cardCountSummary && (
+                <span
+                  className="font-semibold tracking-wide truncate opacity-90"
+                  style={{
+                    fontFamily: subtextFontStack,
+                    fontSize: `${metaCountFontSizePx}px`,
+                    lineHeight: 1.25,
+                    marginTop: `${Math.max(1, 2 * scaleRatio)}px`,
+                    color: '#e2e8f0',
+                    textShadow: '0 1px 8px rgba(0,0,0,0.95)',
+                  }}
+                >
+                  {cardCountSummary}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       )}

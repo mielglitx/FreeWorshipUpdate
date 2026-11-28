@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { SongItem, Slide } from '../types/worship';
-import { X, Plus, Trash2, Music, FileText } from 'lucide-react';
+import { MediaAsset, SongItem, Slide } from '../types/worship';
+import { formatSongTitleSmart } from '../services/songStorage';
+import { X, Plus, Music, FileText, Image as ImageIcon, RotateCcw } from 'lucide-react';
 
 interface SongEditorModalProps {
   initialSong?: SongItem | null;
+  mediaPool?: MediaAsset[];
   onSave: (song: SongItem, addToSchedule: boolean) => void;
   onClose: () => void;
 }
@@ -52,29 +54,48 @@ function slidesToRawLyrics(slides: Slide[]): string {
     .join('\n\n');
 }
 
-export const SongEditorModal: React.FC<SongEditorModalProps> = ({ initialSong, onSave, onClose }) => {
+export const SongEditorModal: React.FC<SongEditorModalProps> = ({
+  initialSong,
+  mediaPool = [],
+  onSave,
+  onClose,
+}) => {
   const [title, setTitle] = useState(initialSong?.title || '');
   const [author, setAuthor] = useState(initialSong?.author || '');
   const [ccliNumber, setCcliNumber] = useState(initialSong?.ccliNumber || '');
   const [musicalKey, setMusicalKey] = useState(initialSong?.musicalKey || 'G');
   const [bpm, setBpm] = useState<number>(initialSong?.bpm || 72);
+  const [arrangement, setArrangement] = useState<string[]>(initialSong?.arrangement || []);
+  const [slideBgOverrides, setSlideBgOverrides] = useState<Record<number, string>>(() => {
+    const map: Record<number, string> = {};
+    initialSong?.slides?.forEach((s, idx) => {
+      if (s.backgroundOverrideId) map[idx] = s.backgroundOverrideId;
+    });
+    return map;
+  });
   const [rawLyrics, setRawLyrics] = useState<string>(
     initialSong
       ? slidesToRawLyrics(initialSong.slides)
       : `[Verse 1]\nChords: G | C | Em | D\nSing a new song unto the Lord\nLet His praise fill this sanctuary\n\n[Chorus]\nChords: C | G | D | Em\nHoly is the Lord Almighty\nForever You reign in glory\n\n[Bridge]\nChords: Am | Em | C | D\nWe lift our hands in worship\nYour kingdom shall never end`
   );
 
-  const previewSlides = parseRawLyricsToSlides(rawLyrics);
+  const previewSlides = parseRawLyricsToSlides(rawLyrics).map((sl, idx) => ({
+    ...sl,
+    backgroundOverrideId: slideBgOverrides[idx] || undefined,
+  }));
+  const uniqueTags = Array.from(new Set(previewSlides.map((s) => s.tag)));
 
   const handleSubmit = (addToSchedule: boolean) => {
-    if (!title.trim()) return;
+    const formattedTitle = formatSongTitleSmart(title);
+    if (!formattedTitle) return;
     const savedSong: SongItem = {
       id: initialSong?.id || `song-${Date.now()}`,
-      title: title.trim(),
+      title: formattedTitle,
       author: author.trim() || 'Unknown Author',
       ccliNumber: ccliNumber.trim() || 'N/A',
       musicalKey: musicalKey.trim() || 'C',
       bpm,
+      arrangement: arrangement.length > 0 ? arrangement : undefined,
       defaultBackgroundId: initialSong?.defaultBackgroundId || 'bg-aurora',
       slides: previewSlides,
     };
@@ -122,6 +143,9 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({ initialSong, o
                   placeholder="e.g. Way Maker / Amazing Grace"
                   className="w-full bg-booth-950 border border-booth-700 rounded-lg px-3 py-2 text-sm text-white focus:border-amber-400 focus:outline-none"
                 />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Auto Title Case on save; custom capitalization (e.g. GOD, LORD) is preserved.
+                </p>
               </div>
 
               <div>
@@ -202,9 +226,62 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({ initialSong, o
             </div>
           </div>
 
-          {/* Live Slide Block Preview */}
-          <div className="md:col-span-5 flex flex-col bg-booth-950 border border-booth-800 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-3">
+          {/* Live Slide Block Preview + Arrangement & Per-Slide Backgrounds */}
+          <div className="md:col-span-5 flex flex-col bg-booth-950 border border-booth-800 rounded-xl p-4 gap-3">
+            {/* Arrangement Order Builder */}
+            <div className="bg-booth-900 border border-booth-800 rounded-lg p-2.5 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400">
+                  Play Arrangement Order
+                </span>
+                {arrangement.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setArrangement([])}
+                    className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1"
+                    title="Reset to default slide order"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    Reset
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {uniqueTags.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => setArrangement((prev) => [...prev, tag])}
+                    className="px-2 py-0.5 rounded bg-booth-850 hover:bg-amber-500/20 border border-booth-700 hover:border-amber-500/50 text-[10px] font-bold text-slate-200"
+                  >
+                    + {tag}
+                  </button>
+                ))}
+              </div>
+              {arrangement.length > 0 ? (
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {arrangement.map((tag, aIdx) => (
+                    <button
+                      key={`${tag}-${aIdx}`}
+                      type="button"
+                      onClick={() =>
+                        setArrangement((prev) => prev.filter((_, i) => i !== aIdx))
+                      }
+                      className="px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-200 text-[10px] font-bold hover:bg-red-500/25 hover:border-red-400"
+                      title="Click to remove from arrangement"
+                    >
+                      {aIdx + 1}. {tag} ×
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[10px] text-slate-500">
+                  Default order ({previewSlides.length} slides). Click tags above to build a reusable flow (e.g. V1 → C → V2 → C → B → C).
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
                 <FileText className="w-3.5 h-3.5" />
                 Compiled Slide Blocks ({previewSlides.length})
@@ -216,9 +293,9 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({ initialSong, o
               {previewSlides.map((slide, idx) => (
                 <div
                   key={slide.id}
-                  className="bg-booth-900 border border-booth-700 rounded-lg p-3 text-xs space-y-1"
+                  className="bg-booth-900 border border-booth-700 rounded-lg p-3 text-xs space-y-1.5"
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold uppercase text-[10px]">
                       #{idx + 1} • {slide.tag}
                     </span>
@@ -228,11 +305,37 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({ initialSong, o
                       </span>
                     )}
                   </div>
-                  <div className="text-slate-100 font-medium pt-1 space-y-0.5">
+                  <div className="text-slate-100 font-medium pt-0.5 space-y-0.5">
                     {slide.lines.map((line, lIdx) => (
                       <p key={lIdx}>{line}</p>
                     ))}
                   </div>
+                  {mediaPool.length > 0 && (
+                    <div className="pt-1 border-t border-booth-800 flex items-center gap-1.5">
+                      <ImageIcon className="w-3 h-3 text-slate-400 shrink-0" />
+                      <select
+                        value={slideBgOverrides[idx] || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSlideBgOverrides((prev) => {
+                            const next = { ...prev };
+                            if (val) next[idx] = val;
+                            else delete next[idx];
+                            return next;
+                          });
+                        }}
+                        className="flex-1 bg-booth-950 border border-booth-800 rounded px-1.5 py-0.5 text-[10px] text-slate-300 focus:outline-none"
+                        title="Optional per-slide background override"
+                      >
+                        <option value="">Background: Song Default</option>
+                        {mediaPool.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            Override: {m.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

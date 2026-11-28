@@ -71,21 +71,111 @@ export async function loadSongsFromIndexedDB(): Promise<SongItem[] | null> {
   }
 }
 
+const MINOR_TITLE_WORDS = new Set([
+  'a',
+  'an',
+  'the',
+  'and',
+  'but',
+  'or',
+  'nor',
+  'for',
+  'yet',
+  'so',
+  'as',
+  'at',
+  'by',
+  'in',
+  'of',
+  'on',
+  'per',
+  'to',
+  'via',
+]);
+
+/**
+ * Capitalizes a song title using English Title Case while strictly preserving
+ * any custom capitalization entered by the user in a word (e.g. GOD, LORD).
+ */
+export function formatSongTitleSmart(rawTitle: string): string {
+  const trimmed = (rawTitle || '').trim().replace(/\s+/g, ' ');
+  if (!trimmed) return '';
+
+  const words = trimmed.split(' ');
+  const lastIdx = words.length - 1;
+
+  const formatSegment = (segment: string, isBoundaryWord: boolean): string => {
+    if (!segment) return segment;
+    const match = segment.match(/^([^A-Za-z0-9]*)(.*?)([^A-Za-z0-9]*)$/);
+    if (!match) return segment;
+    const [, lead, core, trail] = match;
+    if (!core) return segment;
+
+    // Respect user's explicit capitalization when any uppercase letter is present
+    if (/[A-Z]/.test(core)) {
+      return segment;
+    }
+
+    const lowerCore = core.toLowerCase();
+    if (!isBoundaryWord && lowerCore !== 'i' && MINOR_TITLE_WORDS.has(lowerCore)) {
+      return segment;
+    }
+
+    const capitalizedCore = lowerCore.replace(/[a-z]/, (ch) => ch.toUpperCase());
+    return `${lead}${capitalizedCore}${trail}`;
+  };
+
+  let forceNextAfterPunct = false;
+
+  return words
+    .map((word, idx) => {
+      const isFirstOrLast = idx === 0 || idx === lastIdx || forceNextAfterPunct;
+      const startsSubClause = /^[(\["“'‘]/.test(word);
+      forceNextAfterPunct = /[:\-–—/.!?]$/.test(word);
+
+      const parts = word.split(/([-/])/);
+      const formattedParts = parts.map((part, pIdx) => {
+        if (part === '-' || part === '/') return part;
+        const partIsBoundary =
+          (isFirstOrLast || startsSubClause) && pIdx === 0
+            ? true
+            : pIdx === parts.length - 1 && idx === lastIdx;
+        return formatSegment(part, partIsBoundary);
+      });
+
+      return formattedParts.join('');
+    })
+    .join(' ');
+}
+
 /**
  * Merges loaded/persisted songs with default songs without overwriting or deleting any user-created songs.
  */
 export function mergeSongsWithDefaults(loaded: SongItem[], defaults: SongItem[]): SongItem[] {
   if (!loaded || loaded.length === 0) return defaults;
 
+  const defaultById = new Map(defaults.map((ds) => [ds.id, ds]));
+  const normalizedLoaded = loaded.map((s) => {
+    const def = defaultById.get(s.id);
+    if (
+      def &&
+      s.title !== def.title &&
+      s.title.trim().toLowerCase() === def.title.trim().toLowerCase()
+    ) {
+      return { ...s, title: def.title };
+    }
+    return s;
+  });
+
   const existingTitles = new Set(
-    loaded.map((s) => s.title.trim().toLowerCase().replace(/[^a-z0-9]/g, ''))
+    normalizedLoaded.map((s) => s.title.trim().toLowerCase().replace(/[^a-z0-9]/g, ''))
   );
-  const existingIds = new Set(loaded.map((s) => s.id));
+  const existingIds = new Set(normalizedLoaded.map((s) => s.id));
 
   const missingDefaults = defaults.filter((ds) => {
     const normTitle = ds.title.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
     return !existingTitles.has(normTitle) && !existingIds.has(ds.id);
   });
 
-  return [...loaded, ...missingDefaults];
+  return [...normalizedLoaded, ...missingDefaults];
 }

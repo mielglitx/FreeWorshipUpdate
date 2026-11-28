@@ -293,6 +293,17 @@ export function subscribeRemoteCommands(
   };
 }
 
+export function hashRemotePin(pin: string): string {
+  const clean = (pin || '').trim();
+  if (!clean) return '';
+  let hash = 2166136261;
+  for (let i = 0; i < clean.length; i++) {
+    hash ^= clean.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `fwpin-${(hash >>> 0).toString(16)}`;
+}
+
 export function normalizeHostUrl(input: string): string {
   if (!input) return '';
   let trimmed = input.trim().replace(/\/+$/, '');

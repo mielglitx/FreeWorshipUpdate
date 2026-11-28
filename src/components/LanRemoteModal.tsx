@@ -6,10 +6,13 @@ import {
   Download,
   ExternalLink,
   HelpCircle,
+  Lock,
   QrCode,
+  Radio,
   RefreshCw,
   ShieldCheck,
   Smartphone,
+  Tv,
   Wifi,
   X,
 } from 'lucide-react';
@@ -18,14 +21,24 @@ import {
   fetchLocalLanServerInfo,
   LanServerInfo,
 } from '../services/liveSyncBus';
+import { MidiListenerStatus } from '../services/midiController';
 import { GITHUB_RAW_APK_URL } from './SystemModals';
 
 interface LanRemoteModalProps {
   isOpen: boolean;
   onClose: () => void;
+  operatorPin?: string;
+  onUpdateOperatorPin?: (pin: string) => void;
+  midiStatus?: MidiListenerStatus;
 }
 
-export const LanRemoteModal: React.FC<LanRemoteModalProps> = ({ isOpen, onClose }) => {
+export const LanRemoteModal: React.FC<LanRemoteModalProps> = ({
+  isOpen,
+  onClose,
+  operatorPin = '',
+  onUpdateOperatorPin,
+  midiStatus,
+}) => {
   const [lanInfo, setLanInfo] = useState<LanServerInfo>({
     ips: ['Detecting...'],
     port: 5174,
@@ -41,7 +54,8 @@ export const LanRemoteModal: React.FC<LanRemoteModalProps> = ({ isOpen, onClose 
   const [isSavingApk, setIsSavingApk] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [appleQrDataUrl, setAppleQrDataUrl] = useState<string>('');
-  const [qrZoomedMode, setQrZoomedMode] = useState<'android' | 'apple' | null>(null);
+  const [stageOnlyQrDataUrl, setStageOnlyQrDataUrl] = useState<string>('');
+  const [qrZoomedMode, setQrZoomedMode] = useState<'android' | 'apple' | 'stage-only' | null>(null);
 
   const handleGetApk = async () => {
     setIsSavingApk(true);
@@ -100,6 +114,18 @@ export const LanRemoteModal: React.FC<LanRemoteModalProps> = ({ isOpen, onClose 
     validIps.length > 0
       ? `http://${validIps[0]}:${lanInfo.port}/remote`
       : `${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5174'}/?view=android`;
+  const stageOnlyUrl =
+    validIps.length > 0
+      ? `http://${validIps[0]}:${lanInfo.port}/stage-only`
+      : `${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5174'}/?view=android&stageOnly=1`;
+  const obsBrowserSourceUrl =
+    validIps.length > 0
+      ? `http://${validIps[0]}:${lanInfo.port}/obs`
+      : `${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5174'}/?view=stream`;
+  const triggerBaseUrl =
+    validIps.length > 0
+      ? `http://${validIps[0]}:${lanInfo.port}/api/trigger`
+      : `http://127.0.0.1:${lanInfo.port}/api/trigger`;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -131,10 +157,19 @@ export const LanRemoteModal: React.FC<LanRemoteModalProps> = ({ isOpen, onClose 
           if (!cancelled) setAppleQrDataUrl('');
         });
     }
+    if (stageOnlyUrl) {
+      QRCode.toDataURL(stageOnlyUrl, qrOptions)
+        .then((url) => {
+          if (!cancelled) setStageOnlyQrDataUrl(url);
+        })
+        .catch(() => {
+          if (!cancelled) setStageOnlyQrDataUrl('');
+        });
+    }
     return () => {
       cancelled = true;
     };
-  }, [isOpen, apkDownloadUrl, appleWebRemoteUrl]);
+  }, [isOpen, apkDownloadUrl, appleWebRemoteUrl, stageOnlyUrl]);
 
   if (!isOpen) return null;
 
@@ -385,6 +420,125 @@ export const LanRemoteModal: React.FC<LanRemoteModalProps> = ({ isOpen, onClose 
             </p>
           )}
 
+          {/* Read-Only Stage QR, Operator PIN, OBS Browser Source & Stream Deck / MIDI */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Read-Only Stage View QR + Operator PIN */}
+            <div className="bg-booth-950 border border-indigo-500/40 rounded-xl p-3.5 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="text-xs font-black uppercase tracking-wider text-indigo-300 flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5" />
+                  Read-Only Band Stage &amp; Operator PIN
+                </h4>
+              </div>
+
+              <div className="bg-black/60 border border-booth-800 rounded-xl p-2.5 flex items-center justify-between gap-2.5">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="text-[10px] font-bold uppercase text-indigo-300">
+                    Band / Singer Read-Only Stage QR:
+                  </div>
+                  <div className="text-[10px] font-mono text-indigo-200 break-all">
+                    {stageOnlyUrl}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(stageOnlyUrl)}
+                    className="px-2 py-1 rounded bg-indigo-500 hover:bg-indigo-400 text-white font-bold text-[10px] inline-flex items-center gap-1"
+                  >
+                    <Copy className="w-3 h-3" />
+                    <span>{copiedIp === stageOnlyUrl ? 'Copied!' : 'Copy Stage URL'}</span>
+                  </button>
+                </div>
+                {stageOnlyQrDataUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setQrZoomedMode('stage-only')}
+                    className="p-1 bg-white rounded-lg border-2 border-indigo-400/70 shrink-0 hover:scale-105 transition"
+                    title="Enlarge Read-Only Stage QR"
+                  >
+                    <img src={stageOnlyQrDataUrl} alt="Read-Only Stage QR" className="w-16 h-16 block" />
+                  </button>
+                )}
+              </div>
+
+              {onUpdateOperatorPin && (
+                <div className="flex items-center justify-between gap-2 pt-1">
+                  <label className="text-[11px] text-slate-300 font-semibold">
+                    Controller PIN (optional):
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={8}
+                      value={operatorPin}
+                      onChange={(e) => onUpdateOperatorPin(e.target.value.replace(/\s+/g, ''))}
+                      placeholder="Off (4 digits)"
+                      className="w-28 bg-black border border-booth-700 rounded-lg px-2 py-1 text-xs font-mono text-amber-300 focus:border-amber-400 focus:outline-none"
+                    />
+                    {operatorPin && (
+                      <button
+                        type="button"
+                        onClick={() => onUpdateOperatorPin('')}
+                        className="px-2 py-1 rounded bg-booth-800 text-[10px] text-slate-300 hover:text-white"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* OBS Browser Source + Stream Deck / MIDI Triggers */}
+            <div className="bg-booth-950 border border-purple-500/40 rounded-xl p-3.5 space-y-2.5">
+              <h4 className="text-xs font-black uppercase tracking-wider text-purple-300 flex items-center gap-1.5">
+                <Tv className="w-3.5 h-3.5" />
+                OBS Browser Source &amp; Stream Deck / MIDI
+              </h4>
+              <div className="bg-black/60 border border-booth-800 rounded-xl p-2.5 space-y-1.5">
+                <div className="text-[10px] font-bold uppercase text-purple-300">
+                  OBS / vMix Transparent Lower-Third URL (1920×1080):
+                </div>
+                <div className="text-[11px] font-mono text-purple-200 break-all">
+                  {obsBrowserSourceUrl}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(obsBrowserSourceUrl)}
+                    className="px-2 py-1 rounded bg-purple-500 hover:bg-purple-400 text-white font-bold text-[10px] inline-flex items-center gap-1"
+                  >
+                    <Copy className="w-3 h-3" />
+                    <span>{copiedIp === obsBrowserSourceUrl ? 'Copied!' : 'Copy OBS URL'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.open(obsBrowserSourceUrl, 'freeworship_obs_preview', 'width=1280,height=720')}
+                    className="px-2 py-1 rounded bg-booth-850 hover:bg-booth-800 border border-booth-700 text-purple-300 font-bold text-[10px] inline-flex items-center gap-1"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    <span>Preview</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="text-[10px] text-slate-300 space-y-1">
+                <div className="font-bold text-amber-300 flex items-center gap-1">
+                  <Radio className="w-3 h-3" />
+                  <span>Stream Deck / HTTP Triggers:</span>
+                </div>
+                <div className="font-mono text-[10px] text-slate-400 break-all">
+                  {triggerBaseUrl}/next • /prev • /blackout • /logo • /clear • /restore • /pad/G
+                </div>
+                {midiStatus && (
+                  <div className="text-[10px] text-emerald-300 font-mono">
+                    MIDI: {midiStatus.lastMessage}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* Server IP Address Banner */}
           <div className="bg-booth-950 border border-booth-800 rounded-xl p-4 space-y-3">
             <div className="flex items-center justify-between">
@@ -567,25 +721,40 @@ export const LanRemoteModal: React.FC<LanRemoteModalProps> = ({ isOpen, onClose 
       </div>
 
       {/* Enlarged QR Code Lightbox Overlay */}
-      {qrZoomedMode && (qrZoomedMode === 'apple' ? appleQrDataUrl : qrDataUrl) && (
+      {qrZoomedMode &&
+        (qrZoomedMode === 'apple'
+          ? appleQrDataUrl
+          : qrZoomedMode === 'stage-only'
+          ? stageOnlyQrDataUrl
+          : qrDataUrl) && (
         <div
           className="fixed inset-0 z-[70] bg-black/90 flex items-center justify-center p-4"
           onClick={() => setQrZoomedMode(null)}
         >
           <div
             className={`bg-booth-900 border-2 ${
-              qrZoomedMode === 'apple' ? 'border-sky-400' : 'border-emerald-400'
+              qrZoomedMode === 'apple'
+                ? 'border-sky-400'
+                : qrZoomedMode === 'stage-only'
+                ? 'border-indigo-400'
+                : 'border-emerald-400'
             } rounded-2xl p-6 max-w-sm w-full text-center space-y-3 shadow-2xl`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
               <span
                 className={`text-xs font-black uppercase tracking-wider ${
-                  qrZoomedMode === 'apple' ? 'text-sky-300' : 'text-emerald-300'
+                  qrZoomedMode === 'apple'
+                    ? 'text-sky-300'
+                    : qrZoomedMode === 'stage-only'
+                    ? 'text-indigo-300'
+                    : 'text-emerald-300'
                 }`}
               >
                 {qrZoomedMode === 'apple'
                   ? 'Scan for Apple / Browser Remote'
+                  : qrZoomedMode === 'stage-only'
+                  ? 'Scan for Read-Only Band Stage View'
                   : 'Scan to Download Android APK'}
               </span>
               <button
@@ -598,21 +767,29 @@ export const LanRemoteModal: React.FC<LanRemoteModalProps> = ({ isOpen, onClose 
             </div>
             <div className="bg-white p-3 rounded-xl inline-block mx-auto">
               <img
-                src={qrZoomedMode === 'apple' ? appleQrDataUrl : qrDataUrl}
-                alt={
+                src={
                   qrZoomedMode === 'apple'
-                    ? 'Apple Web Browser Remote QR Code'
-                    : 'Android APK Download QR Code'
+                    ? appleQrDataUrl
+                    : qrZoomedMode === 'stage-only'
+                    ? stageOnlyQrDataUrl
+                    : qrDataUrl
                 }
+                alt="FreeWorship QR Code"
                 className="w-56 h-56 block"
               />
             </div>
             <p className="text-[11px] font-mono text-sky-300 break-all">
-              {qrZoomedMode === 'apple' ? appleWebRemoteUrl : apkDownloadUrl}
+              {qrZoomedMode === 'apple'
+                ? appleWebRemoteUrl
+                : qrZoomedMode === 'stage-only'
+                ? stageOnlyUrl
+                : apkDownloadUrl}
             </p>
             <p className="text-[11px] text-slate-400">
               {qrZoomedMode === 'apple'
                 ? 'Point your iPhone, iPad, or Mac camera to open the live remote controller in Safari (same Wi-Fi).'
+                : qrZoomedMode === 'stage-only'
+                ? 'Band members & singers can scan this for a safe Read-Only Stage Confidence Monitor.'
                 : 'Scan with your Android camera or QR app while connected to the same Wi-Fi network.'}
             </p>
           </div>
