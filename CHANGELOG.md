@@ -4,7 +4,7 @@ All notable changes to the **FreeWorship Studio** (Windows Desktop Presentation 
 
 ---
 
-## [1.1.9] — November 26, 2026
+## [1.1.9] — November 28, 2026
 
 ### 🌐 Apple iPhone / iPad Safari & Browser Web Remote + LAN Web Server
 - **Built-in Local Network Web Server**: FreeWorship Studio now serves the live Stage Confidence Monitor & Remote Controller directly over ports `5174` / `5173` (`/remote`, `/apple`, `/ios`, `/?view=android`, plus static assets and `/bibles/*`) without breaking Android **Scan PC** health checks or `.apk` downloads.
@@ -21,7 +21,7 @@ All notable changes to the **FreeWorship Studio** (Windows Desktop Presentation 
 - **Seamless Virtualized 66-Book Scroll List**: Continuous variable-height scroll from Genesis 1:1 through Revelation 22:21 without stopping at book or chapter walls, plus touchscreen **Select Range** mode on mobile remotes.
 
 ### 🎓 Expanded Topic Live Voice Tours (7 New Feature Walkthroughs)
-- Added dedicated live on-interface voice-guided topic tours accessible from **Help > How to Use** (`en-US-AndrewMultilingualNeural` studio narration):
+- Added dedicated live on-interface voice-guided topic tours accessible from **Help > How to Use** (`en-US-AndrewMultilingualNeural` studio narration) and fixed voice-over narration playback cutoff (`LiveInterfaceTourOverlay.tsx`):
   1. **Displays & Text Boundaries**: Mapping Physical Monitors 1/2/3 and dragging the 16:9 interactive Text Boundary safe-area box.
   2. **Continuous Bible Lookup**: Typing OT-then-NT book suggestions, jumping with visible context, and scrolling 66 books offline.
   3. **Songs & PowerPoint (`.PPTX`)**: Authoring chorded songs, importing `.PPTX`, and exporting Schedules/Songs to `.PPTX`.
@@ -29,6 +29,24 @@ All notable changes to the **FreeWorship Studio** (Windows Desktop Presentation 
   5. **Worship Pads & Audio Player**: 12-key ambient shimmer synth and 3-second booth audio fade-out.
   6. **Layout, Slides & Stage Alerts**: Split/Live/Preview views, slide transitions, `+ Quick Slide`, Countdown, and Stage/Nursery alerts.
   7. **Apple QR, Android Sync & Permissions**: Dual Apple/Android QR scanning, Windows Firewall setup, and browser `Keep Screen Awake` / Local Network (`and-06`) guide.
+
+### 🎸 Worship Team, Stage & Booth Pro Tools
+- **Chord Transposition & Capo Calculator** (`chordTransposer.ts`): Instant key/semitone transposition and Capo fret calculation in Song Editor, Stage Confidence Monitor (3rd Screen), and Android/Web Remotes.
+- **Visual Stage BPM Pulse** (`StageBpmPulse.tsx`): Synchronized tempo beat indicator on desktop Stage Monitor and mobile remote displays.
+- **CCLI Activity Logger & Export** (`ccliLogService.ts`, `CcliReportModal.tsx`): Tracks projected songs for CCLI reporting with copy-ready summary and CSV export.
+- **Web MIDI Foot-Pedal / Controller Support** (`midiController.ts`): Map hardware MIDI foot pedals and controllers to slide advance/back and panic controls.
+- **Optional Remote Operator PIN Lock** (`LanRemoteModal.tsx`, `AndroidStageControllerView.tsx`): Protect live booth controls on LAN/Wi-Fi remotes behind an operator PIN.
+
+### 🖥️ Screen Resolution Auto-Adapter, 2nd Screen Enhancements & Workflow
+- **Resolution Auto-Adjustment Module** (`resolutionAdapter.ts` & `electron/main.cjs`): Fixed `1920×1080` layout clipping across Live/Preview headers, Song cards, and bottom monitors, and added responsive auto-scaling across 11 display presets down to `800×600`.
+- **Preview-First Schedule & Aligned Bottom Monitors**: Single-clicking a Schedule item loads it in **Preview** first, while double-clicking takes it **Live**; swapped the bottom monitor layout (**PREVIEW** left, **PROGRAM LIVE** right) to align under the Preview and Live center cards.
+- **2nd Screen Composer & Section Card Counts** (`SlideStageRenderer.tsx`): Displays the writer/composer name and verse/chorus/other text card counts underneath the title overlay on the 2nd Screen and Live/Preview monitors.
+- **Single-Monitor 2nd Screen Disable Shortcut (`Ctrl+Shift+2`)**: Added OS-level global shortcut `Ctrl+Shift+2` (plus `Esc` / floating exit pill when only 1 physical monitor is connected, hidden whenever 2+ monitors are active) and **Output → Disable 2nd Screen (Projector)**.
+
+### 🎵 Expanded Song Library, Themed Motion Loops & Smart Title Case
+- **41 Classic Public-Domain Hymns Added** (`classicHymnsPack.ts`) and **18 Existing Song Title Capitalizations Fixed** (`defaultData.ts`, `songStorage.ts`).
+- **Smart Per-Word Title Capitalization** (`formatSongTitleSmart`): Automatically applies clean English Title Case to added/imported songs while preserving custom user capitalization (e.g., `GOD`, `LORD`, `THY`).
+- **10 New Themed Motion Loops & Media Filters** (`MotionBackgroundCanvas.tsx`): Added Worship, Praise, Glory, Holiness, and Salvation motion backgrounds with category filter tabs in the Media deck.
 
 ---
 
